@@ -1,6 +1,6 @@
 /*  src/core/dom.js  –  Helper DOM 100 % reactivo  */
 
-import { effect, createRoot, onCleanup, getOwner } from '@core/signal.js'
+import { effect, createRoot, onCleanup, getOwner, untrack } from '@core/signal.js'
 
 /* ----------  utilidades internas  ---------- */
 const isSignal = v => v && typeof v.get === 'function'
@@ -44,20 +44,88 @@ export const bindAttr = (el, attr, signal) => {
 }
 
 /* ----------  3.b  reactiveChild  ---------- */
-// Hijo reactivo: el signal puede contener texto, un Node o un valor vacío (false/null)
+// Hijo reactivo: el signal puede contener texto, un Node, un fragmento (p.ej. un For)
+// o un valor vacío (false/null).
+// - Texto/vacío: un único nodo de texto que se actualiza (sin coste extra).
+// - Nodo o fragmento: el contenido va entre dos comentarios-ancla propios. Nadie más
+//   los toca, así que el rango es estable aunque el contenido cambie por dentro (un For
+//   que crece, un Show anidado que cambia de rama…). Al retirar un fragmento, sus nodos
+//   vuelven a él, de modo que se puede mostrar otra vez.
 export const reactiveChild = signal => {
   const textNode = document.createTextNode('')
-  let node = textNode
-  enlazar(() => node.parentElement, () => {
-    const v = signal.get()
-    const next = v instanceof Node ? v : textNode
-    if (next === textNode) textNode.nodeValue = isEmptyChild(v) ? '' : String(v)
-    if (next !== node) {
-      if (node.parentNode) node.parentNode.replaceChild(next, node)
-      node = next
+  let inicio = null          // anclas: solo existen mientras el valor es un nodo
+  let fin = null
+  let fragmentoActual = null // fragmento cuyo contenido está ahora entre las anclas
+  let anterior               // último valor: un mismo Node no se vuelve a insertar
+  let ejecutado = false
+  let inicial = textNode     // lo que se devuelve para la primera inserción
+
+  const primerNodo = () => inicio ?? textNode
+
+  // Quita el contenido entre las anclas (devolviéndolo a su fragmento si lo había)
+  const vaciar = () => {
+    let n = inicio.nextSibling
+    while (n && n !== fin) {
+      const siguiente = n.nextSibling
+      if (fragmentoActual) fragmentoActual.appendChild(n)
+      else n.remove()
+      n = siguiente
     }
+  }
+
+  enlazar(() => primerNodo().parentElement, () => {
+    const v = signal.get()
+    if (v instanceof Node && v === anterior) return
+    anterior = v
+
+    const padre = primerNodo().parentNode
+    if (!padre && ejecutado) {
+      console.warn('reactiveChild: su nodo ya no está en el DOM (¿lo quitó otro código?); no se actualiza')
+      return
+    }
+
+    const esNodo = v instanceof Node && !(v instanceof DocumentFragment && !v.firstChild)
+
+    if (!esNodo) {
+      textNode.nodeValue = isEmptyChild(v) || v instanceof Node ? '' : String(v)
+      if (inicio) {
+        // nodo → texto: el texto ocupa el sitio de las anclas
+        if (padre) {
+          padre.insertBefore(textNode, inicio)
+          vaciar()
+          inicio.remove()
+          fin.remove()
+        }
+        inicio = fin = null
+      }
+      fragmentoActual = null
+      if (!padre) inicial = textNode
+    } else {
+      if (!inicio) {
+        inicio = document.createComment('')
+        fin = document.createComment('')
+        if (padre) {
+          // texto → nodo: las anclas ocupan el sitio del texto
+          padre.insertBefore(inicio, textNode)
+          padre.insertBefore(fin, textNode)
+          textNode.remove()
+        }
+      } else {
+        vaciar() // nodo → nodo: se conserva el rango, solo cambia el contenido
+      }
+      fragmentoActual = v instanceof DocumentFragment ? v : null
+      if (padre) {
+        fin.parentNode.insertBefore(v, fin)
+      } else {
+        // Primera ejecución: se devuelve [ancla, contenido, ancla] para insertar
+        const f = document.createDocumentFragment()
+        f.append(inicio, v, fin)
+        inicial = f
+      }
+    }
+    ejecutado = true
   })
-  return node
+  return inicial
 }
 
 /* ----------  3.  reactiveText  ---------- */
@@ -294,13 +362,28 @@ const bindTwoWay = (el, prop, signal) => {
     return
   }
   if (prop === 'value') {
-    effect(() => {
+    // <input type="number|range">: el signal recibe un número (vacío o inválido → null)
+    const numerico = el.tagName === 'INPUT' && (el.type === 'number' || el.type === 'range')
+    const leer = () => {
+      if (!numerico) return el.value
+      return el.value === '' || Number.isNaN(el.valueAsNumber) ? null : el.valueAsNumber
+    }
+    const aplicar = () => {
       const v = signal.get()
+      // Numérico: si lo tecleado ya equivale al valor ("1.0" = 1), no se toca (se podría seguir escribiendo)
+      if (numerico && leer() === (v ?? null)) return
       const texto = v === null || v === undefined ? '' : String(v)
       if (el.value !== texto) el.value = texto
-    })
-    el.addEventListener('input', () => signal.set(el.value))
-    if (el.tagName === 'SELECT') el.addEventListener('change', () => signal.set(el.value))
+    }
+    effect(aplicar)
+    el.addEventListener('input', () => signal.set(leer()))
+    if (el.tagName === 'SELECT') {
+      el.addEventListener('change', () => signal.set(leer()))
+      // Si las <option> llegan después (For, datos de una API…), vuelve a aplicar el valor
+      const observador = new MutationObserver(() => untrack(aplicar))
+      observador.observe(el, { childList: true, subtree: true })
+      if (getOwner()) onCleanup(() => observador.disconnect())
+    }
     return
   }
   if (prop === 'checked') {
@@ -330,7 +413,7 @@ export const text = (content) => {
 // Pinta una lista reutilizando los nodos de los elementos que no cambian.
 // - each:   signal/computed con un array, o una función que lo devuelva
 // - key:    (item) => clave única y estable (p.ej. item.id)
-// - render: (item) => UN elemento del DOM
+// - render: (item) => un elemento del DOM (o un fragmento: Show, varios nodos…)
 // Un item con la misma clave y el mismo objeto conserva su nodo (solo se mueve si cambia
 // el orden); con la misma clave pero un objeto nuevo, se re-renderiza solo ese item.
 // Cada item tiene su propio root: sus effects se liberan al quitarlo o al desmontar la lista.
@@ -340,7 +423,33 @@ export const For = (each, key, render) => {
   const fragment = document.createDocumentFragment()
   fragment.append(start, end)
 
-  let entries = new Map() // clave → { item, node, dispose }
+  // clave → { item, dispose, primero, ultimo, pendiente }
+  // Cada item va entre dos anclas propias (primero…ultimo). Son estables aunque el
+  // contenido se sustituya por dentro (un Show que pasa de texto a nodo, un componente
+  // reactivo que se re-renderiza…), así el bloque se mueve y se quita siempre entero.
+  let entries = new Map()
+
+  const crearItem = (item) => createRoot(dispose => {
+    const nodo = render(item)
+    const primero = document.createComment('')
+    const ultimo = document.createComment('')
+    const bloque = document.createDocumentFragment()
+    bloque.append(primero)
+    if (!isEmptyChild(nodo)) bloque.append(nodo instanceof Node ? nodo : document.createTextNode(String(nodo)))
+    bloque.append(ultimo)
+    return { item, dispose, primero, ultimo, pendiente: bloque }
+  })
+
+  // Nodos del rango de un item, en orden
+  const nodosDe = (entry) => {
+    const nodos = []
+    for (let n = entry.primero; n; n = n.nextSibling) {
+      nodos.push(n)
+      if (n === entry.ultimo) break
+    }
+    return nodos
+  }
+  const quitar = (entry) => nodosDe(entry).forEach(n => n.remove())
 
   const disposeAll = () => {
     entries.forEach(entry => entry.dispose())
@@ -351,7 +460,7 @@ export const For = (each, key, render) => {
   effect(() => {
     const items = typeof each === 'function' ? each() : each.get()
     const next = new Map()
-    const nodes = []
+    const orden = []
 
     items.forEach((item, index) => {
       let k = key(item)
@@ -364,31 +473,35 @@ export const For = (each, key, render) => {
       if (entry && !Object.is(entry.item, item)) {
         // Misma clave, objeto nuevo: re-renderiza solo este item
         entry.dispose()
-        entry.node.remove()
+        quitar(entry)
         entry = null
       }
-      if (!entry) {
-        entry = createRoot(dispose => ({ item, node: render(item), dispose }))
-      }
+      if (!entry) entry = crearItem(item)
 
       entries.delete(k)
       next.set(k, entry)
-      nodes.push(entry.node)
+      orden.push(entry)
     })
 
     // Los que quedan en `entries` ya no están en la lista
     entries.forEach(entry => {
       entry.dispose()
-      entry.node.remove()
+      quitar(entry)
     })
     entries = next
 
-    // Coloca los nodos en orden entre los comentarios, moviendo solo los que no están en su sitio
+    // Coloca los rangos en orden entre los comentarios, moviendo solo los que no están en su sitio
     const parent = end.parentNode
     let ref = start
-    for (const node of nodes) {
-      if (ref.nextSibling !== node) parent.insertBefore(node, ref.nextSibling)
-      ref = node
+    for (const entry of orden) {
+      const antes = ref.nextSibling
+      if (entry.pendiente) {
+        parent.insertBefore(entry.pendiente, antes) // primera inserción (un fragmento se vacía aquí)
+        entry.pendiente = null
+      } else if (antes !== entry.primero) {
+        for (const n of nodosDe(entry)) parent.insertBefore(n, antes)
+      }
+      ref = entry.ultimo
     }
   })
 

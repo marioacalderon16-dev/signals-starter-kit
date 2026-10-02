@@ -188,7 +188,7 @@ h('ul', {},
 )
 ```
 
-- `For(lista, clave, render)`: `lista` es un signal, un `computed` o una función que devuelve un array; `clave` debe ser única y estable; `render` devuelve **un** elemento.
+- `For(lista, clave, render)`: `lista` es un signal, un `computed` o una función que devuelve un array; `clave` debe ser única y estable; `render` devuelve un elemento o un fragmento (por ejemplo un `Show`, o varios nodos), que se mueve como un bloque.
 - Mismo `id` y mismo objeto → se conserva el nodo (solo se mueve si cambia el orden). Mismo `id` con un objeto nuevo (actualización inmutable) → se re-renderiza solo ese elemento.
 - Los effects de cada elemento se liberan al quitarlo o al desmontar la lista.
 

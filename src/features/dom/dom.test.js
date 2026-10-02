@@ -3,6 +3,8 @@ import { h, fragment } from './dom.js'
 import { signal } from '@core/signal.js'
 
 const tick = () => new Promise(r => setTimeout(r))
+// Los hijos reactivos con nodos usan dos comentarios como anclas: se ignoran al comparar HTML
+const sinComentarios = (html) => html.replace(/<!--.*?-->/g, '')
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -70,7 +72,7 @@ describe('h() – hijos', () => {
   it('signal hijo puede contener un Node y alternar con texto/false', async () => {
     const s = signal(h('b', {}, 'nodo'))
     const el = h('p', {}, 'antes-', s, '-después')
-    expect(el.innerHTML).toBe('antes-<b>nodo</b>-después')
+    expect(sinComentarios(el.innerHTML)).toBe('antes-<b>nodo</b>-después')
     s.set(false)
     await tick()
     expect(el.textContent).toBe('antes--después')
@@ -79,7 +81,7 @@ describe('h() – hijos', () => {
     expect(el.textContent).toBe('antes-texto-después')
     s.set(h('i', {}, 'otro'))
     await tick()
-    expect(el.innerHTML).toBe('antes-<i>otro</i>-después')
+    expect(sinComentarios(el.innerHTML)).toBe('antes-<i>otro</i>-después')
   })
 
   it('avisa si hay hijos junto a textContent o dangerouslySetInnerHTML', () => {

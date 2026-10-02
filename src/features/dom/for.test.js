@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { h, For } from './dom.js'
+import { h, For, Show } from './dom.js'
 import { signal, createRoot } from '@core/signal.js'
+import { define, c as componente } from '@components/Component.js'
 
 const tick = () => new Promise(r => setTimeout(r))
 
@@ -74,5 +75,61 @@ describe('For', () => {
     lista.set([a, b, c])
     await tick()
     expect([...el.children].map(li => li.textContent)).toEqual(['b', 'c'])
+  })
+})
+
+describe('For con elementos que son fragmentos (Show, varios nodos)', () => {
+  const sinComentarios = (html) => html.replace(/<!--.*?-->/g, '')
+
+  it('reordena, añade y quita elementos cuyo render devuelve un Show', async () => {
+    const lista = signal([1, 2, 3])
+    const { el } = montar(() => h('div', {}, For(lista, x => x, x => Show(() => true, () => h('span', {}, `i${x}`)))))
+    expect(el.textContent).toBe('i1i2i3')
+    lista.set([3, 1]); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<span>i3</span><span>i1</span>')
+    lista.set([2, 3, 1]); await tick()
+    expect(el.textContent).toBe('i2i3i1')
+    lista.set([]); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('')
+  })
+
+  it('un Show que empieza en texto y pasa a nodo sigue moviéndose y quitándose bien', async () => {
+    const items = signal([1, 2])
+    const on = signal(false)
+    const { el } = montar(() => h('div', {}, For(items, x => x, x => Show(on, () => h('span', {}, `S${x}`), () => `t${x}`))))
+    expect(el.textContent).toBe('t1t2')
+    on.set(true); await tick()
+    expect(el.textContent).toBe('S1S2')
+    items.set([2]); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<span>S2</span>')
+    items.set([2, 1]); await tick()
+    expect(el.textContent).toBe('S2S1')
+  })
+
+  it('un componente reactivo (define con true) que se re-renderiza dentro del item no descoloca la lista', async () => {
+    const modo = signal('a')
+    define('FilaReactivaFor', ({ x }) => h('span', {}, `${modo.get()}${x}`), true)
+    const items = signal([1, 2])
+    const { el } = montar(() => h('div', {}, For(items, x => x, x => componente('FilaReactivaFor', { x }))))
+    modo.set('b'); await tick()
+    items.set([2]); await tick()
+    expect(el.textContent).toBe('b2')
+    items.set([2, 1]); await tick()
+    expect(el.textContent).toBe('b2b1')
+  })
+
+  it('un render que devuelve null/false no pinta nada; un texto se pinta como texto', () => {
+    const { el } = montar(() => h('div', {}, For(signal([1, 2, 3]), x => x, x => (x === 1 ? null : x === 2 ? false : 'tres'))))
+    expect(el.textContent).toBe('tres')
+  })
+
+  it('un render que devuelve varios nodos se mueve como un bloque', async () => {
+    const lista = signal(['a', 'b'])
+    const render = (x) => { const f = document.createDocumentFragment(); f.append(h('dt', {}, x), h('dd', {}, x.toUpperCase())); return f }
+    const { el } = montar(() => h('dl', {}, For(lista, x => x, render)))
+    lista.set(['b', 'a']); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<dt>b</dt><dd>B</dd><dt>a</dt><dd>A</dd>')
+    lista.set(['a']); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<dt>a</dt><dd>A</dd>')
   })
 })

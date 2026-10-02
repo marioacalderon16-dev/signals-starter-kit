@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { h, Show } from './dom.js'
+import { h, Show, For } from './dom.js'
 import { signal, createRoot } from '@core/signal.js'
 
 const tick = () => new Promise(r => setTimeout(r))
+// Los hijos reactivos con nodos usan dos comentarios como anclas: se ignoran al comparar HTML
+const sinComentarios = (html) => html.replace(/<!--.*?-->/g, '')
 const montar = (fn) => createRoot(dispose => ({ el: fn(), dispose }))
 
 describe('bind:value / bind:checked', () => {
@@ -102,5 +104,122 @@ describe('Show', () => {
     expect(texto.subs.size).toBe(1)
     dispose()
     expect(texto.subs.size).toBe(0)
+  })
+})
+
+describe('regresiones R1 (dom)', () => {
+  it('Show con una vista que devuelve un fragmento (For) cambia de rama y vuelve', async () => {
+    const on = signal(true)
+    const items = signal([{ id: 1 }, { id: 2 }])
+    const { el } = montar(() => h('div', {},
+      Show(on, () => For(items, x => x.id, x => h('span', {}, `i${x.id}`)), () => h('p', {}, 'off'))
+    ))
+    expect(el.textContent).toBe('i1i2')
+    on.set(false); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<p>off</p>')
+    on.set(true); await tick()
+    expect(el.textContent).toBe('i1i2')
+    items.set([{ id: 3 }]); await tick()
+    expect(el.textContent).toBe('i3') // la lista sigue viva tras volver a mostrarse
+  })
+
+  it('Show + For: si la lista crece antes de ocultarse, no quedan nodos huérfanos', async () => {
+    const on = signal(true)
+    const items = signal([{ id: 1 }])
+    const { el } = montar(() => h('div', {},
+      Show(on, () => For(items, x => x.id, x => h('span', {}, `i${x.id}`)), () => h('p', {}, 'off'))
+    ))
+    items.set([{ id: 1 }, { id: 2 }, { id: 3 }]); await tick()
+    on.set(false); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<p>off</p>')
+  })
+
+  it('un mismo fragmento puede volver a mostrarse (fragmento → texto → fragmento)', async () => {
+    const frag = document.createDocumentFragment()
+    frag.append(h('b', {}, 'A'), h('i', {}, 'B'))
+    const valor = signal(frag)
+    const { el } = montar(() => h('div', {}, valor))
+    valor.set('texto'); await tick()
+    expect(el.textContent).toBe('texto')
+    valor.set(frag); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<b>A</b><i>B</i>')
+  })
+
+  it('el valor nuevo puede ser un nodo que estaba dentro del rango anterior (primero o último)', async () => {
+    const i = h('i', {}, 'I'), b = h('b', {}, 'B')
+    const frag = () => { const f = document.createDocumentFragment(); f.append(i, b); return f }
+    const valor = signal(frag())
+    const { el } = montar(() => h('div', {}, h('em', {}, 'antes'), valor, h('u', {}, 'después')))
+    valor.set(b); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<em>antes</em><b>B</b><u>después</u>')
+    valor.set(frag()); await tick()
+    valor.set(i); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<em>antes</em><i>I</i><u>después</u>')
+  })
+
+  it('Show dentro de Show: el exterior sigue funcionando aunque el interior cambie su nodo', async () => {
+    const a = signal(true), b = signal(true)
+    const { el } = montar(() => h('div', {},
+      Show(a, () => Show(b, () => h('i', {}, 'I'), () => h('s', {}, 'S')), () => h('p', {}, 'off'))
+    ))
+    b.set(false); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<s>S</s>')
+    a.set(false); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<p>off</p>')
+    a.set(true); await tick()
+    expect(sinComentarios(el.innerHTML)).toBe('<s>S</s>')
+  })
+
+  it('texto ↔ nodo ↔ fragmento alternando, sin tocar a los hermanos', async () => {
+    const valor = signal('t')
+    const { el } = montar(() => h('div', {}, '[', valor, ']'))
+    const f = () => { const x = document.createDocumentFragment(); x.append(h('b', {}, '1'), h('b', {}, '2')); return x }
+    for (const [v, esperado] of [[h('i', {}, 'n'), '[<i>n</i>]'], ['texto', '[texto]'], [f(), '[<b>1</b><b>2</b>]'], [null, '[]'], [f(), '[<b>1</b><b>2</b>]'], ['fin', '[fin]']]) {
+      valor.set(v); await tick()
+      expect(sinComentarios(el.innerHTML)).toBe(esperado)
+    }
+  })
+
+  it('si sacan el hijo reactivo del DOM, avisa en lugar de fallar en silencio', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const valor = signal('a')
+    const { el } = montar(() => h('div', {}, valor))
+    el.firstChild.remove()
+    valor.set('b'); await tick()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('bind:value en <input type=number> guarda números (vacío → null)', () => {
+    const n = signal(5)
+    const { el } = montar(() => h('input', { type: 'number', 'bind:value': n }))
+    expect(el.value).toBe('5')
+    el.value = '6'; el.dispatchEvent(new Event('input'))
+    expect(n.get()).toBe(6)
+    el.value = ''; el.dispatchEvent(new Event('input'))
+    expect(n.get()).toBeNull()
+  })
+
+  it('bind:value numérico no reescribe lo que el usuario está tecleando (1.0, 1.50, 01)', async () => {
+    const n = signal(1)
+    const { el } = montar(() => h('input', { type: 'number', 'bind:value': n }))
+    for (const tecleado of ['1.0', '1.50', '01']) {
+      el.value = tecleado; el.dispatchEvent(new Event('input')); await tick()
+      expect(el.value).toBe(tecleado)
+    }
+    expect(n.get()).toBe(1)
+    n.set(7); await tick()
+    expect(el.value).toBe('7') // un cambio real del signal sí se refleja
+  })
+
+  it('bind:value en <select> aplica el valor cuando las opciones llegan después', async () => {
+    const pais = signal('mx')
+    const opciones = signal([])
+    const { el } = montar(() => h('select', { 'bind:value': pais },
+      For(opciones, o => o, o => h('option', { value: o }, o))
+    ))
+    opciones.set(['es', 'mx']); await tick()
+    expect(el.value).toBe('mx')
+    expect(pais.get()).toBe('mx')
   })
 })
