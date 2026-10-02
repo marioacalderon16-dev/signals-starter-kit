@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.0
+
+Funciones nuevas y un ajuste de comportamiento en `buildQueryString` (ver "Cambiado"). Para la mayoría de proyectos, actualizar no requiere tocar nada.
+
+### Añadido
+
+- **`debounced(fuente, ms)`** (en `'@kit'`): un signal que toma el valor de la fuente cuando esta lleva `ms` sin cambiar. Con `resource`, una búsqueda mientras se escribe hace una sola petición. Ver "Esperar a que el usuario pare de escribir" en el README.
+- **`setQuery(params, { replace })`** (en `'@kit'`): cambia la query de la ruta actual combinándola con la existente; `null`, `undefined` o `''` quitan un parámetro. No navega si la URL no cambia. Si la ruta tiene un `title` que depende de `query`, se actualiza. Ver "La query como estado" en el README.
+- **`buildQueryString`** ahora también se exporta desde `'@kit'` (antes había que importarlo de `@features/router/router.utils.js`, que sigue funcionando).
+
+### Cambiado
+
+- `buildQueryString` omite los valores `null`, `undefined` y `''`: `{ q: '' }` da `''` en vez de `'?q='`. `0` y `false` se mantienen. Si dependías de `?q=` vacío en la URL, construye esa URL a mano.
+
 ## 2.0.0
 
 Versión mayor: **un cambio incompatible**, con migración de una línea.

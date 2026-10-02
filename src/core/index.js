@@ -20,3 +20,4 @@ export {
 } from './signal.js'
 
 export { resource } from './resource.js'
+export { debounced } from './debounced.js'

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
 import { define, c } from './Component.js'
 import { h } from '@features/dom/dom.js'
 import { createRoot } from '@core/signal.js'
-import { navigate } from '@features/router/router.state.js'
+import { navigate, setQuery } from '@features/router/router.state.js'
 import { registerRoutes } from '@features/router/router.utils.js'
 
 const cargaDiferida = vi.hoisted(() => ({ resolver: null }))
@@ -15,6 +15,7 @@ const routes = [
     { path: '/lista', component: 'Lista', title: 'Lista', layout: 'Marco' },
     { path: '/rapida', component: 'Rapida', transition: false },
     { path: '/buscar', component: 'Acerca', title: ({ query }) => `Buscar: ${query.q ?? ''}` },
+    { path: '/catalogo', component: 'Catalogo', title: ({ query }) => `Catálogo: ${query.q ?? 'todo'}` },
     { path: '/rota', component: 'Rota', title: () => { throw new Error('título roto') } },
     { path: '/diferida', component: 'Diferida', title: 'Diferida', layout: 'Marco', load: () => new Promise(r => { cargaDiferida.resolver = r }) },
 ]
@@ -22,7 +23,7 @@ registerRoutes(routes)
 
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setTimeout(r)) }
 const p = (name) => () => h('p', {}, `página:${name}`)
-let root, montajesMarco = 0
+let root, montajesMarco = 0, montajesCatalogo = 0
 
 beforeAll(async () => {
   define('Inicio', p('Inicio'))
@@ -30,6 +31,7 @@ beforeAll(async () => {
   define('Lista', p('Lista'))
   define('Rapida', p('Rapida'))
   define('Rota', p('Rota'))
+  define('Catalogo', () => { montajesCatalogo++; return h('p', {}, 'catálogo') })
   define('Producto', ({ params }) => h('p', {}, `producto:${params.id}`))
   define('Marco', ({ content, title }) => {
     montajesMarco++
@@ -161,5 +163,40 @@ describe('API en inglés (R3)', () => {
     expect(props.content).toBeInstanceOf(Node)
     expect(props.contenido).toBe(props.content)
     expect(root.textContent).toBe('página:Acerca')
+  })
+})
+
+describe('Router: setQuery (solo cambia la query)', () => {
+  it('no vuelve a montar la página y actualiza un title que depende de query', async () => {
+    navigate('/catalogo?q=a')
+    await settle()
+    expect(document.title).toBe('Catálogo: a · signals-starter-kit')
+    const montajes = montajesCatalogo
+    setQuery({ q: 'dune' })
+    await settle()
+    expect(document.title).toBe('Catálogo: dune · signals-starter-kit')
+    setQuery({ q: null }, { replace: true })
+    await settle()
+    expect(document.title).toBe('Catálogo: todo · signals-starter-kit')
+    expect(montajesCatalogo).toBe(montajes)
+    expect(root.textContent).toContain('catálogo')
+  })
+
+  it('al ir a una ruta sin página (404) con otra query, no reaplica el title de la ruta anterior', async () => {
+    navigate('/catalogo?q=a')
+    await settle()
+    navigate('/no-existe?q=b')
+    await settle()
+    expect(document.title).not.toContain('Catálogo: b')
+    navigate('/')
+    await settle()
+  })
+
+  it('al cambiar de ruta y query a la vez gana el title de la ruta nueva', async () => {
+    navigate('/catalogo?q=a')
+    await settle()
+    navigate('/acerca?q=b')
+    await settle()
+    expect(document.title).toBe('Acerca de · signals-starter-kit')
   })
 })

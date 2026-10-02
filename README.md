@@ -172,6 +172,23 @@ usuario.mutate(v)     // cambia data en local (p.ej. actualización optimista)
 - Mientras recarga y si falla, `data` conserva el valor anterior. Un `AbortError` no cuenta como error.
 - Los effects creados dentro de otro effect (o de un `createRoot`) se liberan automáticamente cuando su dueño se re-ejecuta o se destruye.
 
+#### Esperar a que el usuario pare de escribir: `debounced`
+
+```js
+import { signal, debounced, resource } from '@kit'
+
+const texto = signal('')                  // se actualiza en cada tecla (bind:value)
+const busqueda = debounced(texto, 300)    // cambia cuando texto lleva 300 ms quieto
+const libros = resource(
+  () => busqueda.get() || null,           // vacío: no se pide nada
+  (q, { signal }) => api.get(`/search.json?q=${encodeURIComponent(q)}`, {}, { signal })
+)
+```
+
+- Escribir "dune" hace **una** petición, no cuatro. Si llega otra búsqueda, `resource` cancela la anterior.
+- Empieza con el valor actual de la fuente (sin esperar). La fuente puede ser un signal, un computed o una función.
+- El temporizador pendiente se cancela al desmontar: créalo dentro de un componente o de un `createRoot`.
+
 ### Crear DOM con `h()`
 
 ```js
@@ -286,6 +303,24 @@ currentQuery.get() // { color: 'rojo' } — reactivo
 - Los enlaces internos `<a href="/...">` navegan sin recargar la página. Los externos, `target="_blank"`, `download` y los clics con modificadores (Ctrl/Cmd…) se dejan al navegador.
 - Las rutas ignoran la query, el hash y la barra final: `/products/7/?x=1` coincide con `/products/:id`.
 - `generateUrl('product', { id: 7 })` construye la URL de una ruta por su nombre.
+
+#### La query como estado: `setQuery`
+
+```js
+import { setQuery, buildQueryString } from '@kit'
+
+// En /libros?q=dune&pagina=2
+setQuery({ pagina: 3 })                  // → /libros?q=dune&pagina=3 (nueva entrada en el historial)
+setQuery({ q: 'tolkien', pagina: null }) // → /libros?q=tolkien (null, undefined o '' quitan el parámetro)
+setQuery({ q: texto }, { replace: true }) // sin entrada nueva: ideal mientras se escribe
+
+buildQueryString({ q: 'a b', vacio: '' }) // '?q=a%20b'
+```
+
+- Combina con la query actual y conserva la ruta y el hash. Si la URL no cambia, no hace nada.
+- La página no se vuelve a montar: solo cambia `currentQuery`, que es reactivo. Así la URL es la fuente de verdad y se puede compartir o recargar. Un `title` que depende de `query` se actualiza; `beforeEnter` y `redirect` no se vuelven a evaluar (solo al cambiar de ruta).
+- Un parámetro repetido (`?tag=a&tag=b`) conserva solo su último valor.
+- Desde un effect no crea dependencias de la query (no hay bucles).
 
 #### Enlaces: `Link`
 

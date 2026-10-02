@@ -66,7 +66,9 @@ define('Router', () => {
   }
 
   // route.title: texto o ({ params, query }) => texto
+  let ultimoTitulo = null // { routeMatch, path }: para re-evaluarlo si solo cambia la query
   const aplicarTitulo = (routeMatch) => {
+    ultimoTitulo = { routeMatch, path: untrack(() => currentPath.get()) }
     const { title } = routeMatch.route
     let texto = title
     if (typeof title === 'function') {
@@ -210,6 +212,16 @@ define('Router', () => {
     }
 
     montar(routeMatch, id)
+  })
+
+  // Si solo cambia la query (p.ej. con setQuery), la página no se vuelve a montar,
+  // pero un title que depende de query sí debe actualizarse
+  effect(() => {
+    currentQuery.get()
+    const ultimo = ultimoTitulo
+    if (!ultimo || typeof ultimo.routeMatch.route.title !== 'function') return
+    if (ultimo.path !== untrack(() => currentPath.get())) return // la ruta cambió: ya lo aplica el effect de arriba
+    aplicarTitulo(ultimo.routeMatch)
   })
 
   return container

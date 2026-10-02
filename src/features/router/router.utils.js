@@ -114,17 +114,16 @@ export function parseQueryParams(url) {
 }
 
 /**
- * Construye una query string desde un objeto.
+ * Construye una query string desde un objeto. Omite los valores vacíos
+ * (null, undefined o ''), así un filtro sin valor no deja '?q=' en la URL.
  * @param {Object} params - Los parámetros a convertir.
- * @returns {string} La query string (ej. '?category=frutas&sort=asc')
+ * @returns {string} La query string (ej. '?category=frutas&sort=asc'), o '' si no queda ninguno.
  */
 export function buildQueryString(params) {
-  const entries = Object.entries(params)
-  if (entries.length === 0) return ''
-
-  const query = entries
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&')
 
-  return `?${query}`
+  return query ? `?${query}` : ''
 }

@@ -85,3 +85,13 @@ describe('Link con base /app/', () => {
     expect(location.pathname + location.search).toBe('/app/tareas?x=1')
   })
 })
+
+describe('setQuery con base /app/', () => {
+  it('conserva la base y la ruta de la app', () => {
+    state.navigate('/tareas?q=1')
+    state.setQuery({ pagina: 2 })
+    expect(location.pathname + location.search).toBe('/app/tareas?q=1&pagina=2')
+    expect(state.currentPath.get()).toBe('/tareas')
+    state.navigate('/')
+  })
+})

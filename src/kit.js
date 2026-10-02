@@ -15,6 +15,7 @@ export {
   createRoot, onCleanup, getOwner, getStats
 } from '@core/signal.js'
 export { resource } from '@core/resource.js'
+export { debounced } from '@core/debounced.js'
 
 // DOM
 export { h, For, Show, fragment, text } from '@features/dom/dom.js'
@@ -27,6 +28,6 @@ export { HttpClient } from '@core/httpClient.js'
 export { persist } from '@shared/utils/persist.js'
 
 // Router (desde la v2 no importa routes.config.js: los guards pueden importar '@kit' sin ciclos)
-export { navigate, replace, url, currentPath, currentQuery } from '@features/router/router.state.js'
-export { registerRoutes } from '@features/router/router.utils.js'
+export { navigate, replace, setQuery, url, currentPath, currentQuery } from '@features/router/router.state.js'
+export { registerRoutes, buildQueryString } from '@features/router/router.utils.js'
 export { Link } from '@features/router/Link.js'

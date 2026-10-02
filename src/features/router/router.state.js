@@ -1,8 +1,8 @@
 // src/features/router/router.state.js
 // Estado del router
 
-import { signal, computed } from '@core/index.js'
-import { parseQueryParams } from './router.utils.js'
+import { signal, computed, untrack } from '@core/index.js'
+import { parseQueryParams, buildQueryString } from './router.utils.js'
 import { stripBase, url, isInBase } from './router.base.js'
 import { logger } from '@shared/utils/logger.js'
 
@@ -61,6 +61,27 @@ export function replace(path) {
   window.history.replaceState(null, null, url(path))
   syncFromLocation()
   log.info(`Reemplazando ruta a: ${path}`)
+}
+
+/**
+ * Cambia la query de la ruta actual: combina `params` con la query actual.
+ * Un valor null, undefined o '' quita ese parámetro. Conserva la ruta y el hash.
+ * Si la URL no cambia, no hace nada (no crea entradas repetidas en el historial).
+ * Limitación: un parámetro repetido (?tag=a&tag=b) conserva solo su último valor.
+ *
+ *   setQuery({ q: 'dune', pagina: 1 })      // ?q=dune&pagina=1 (nueva entrada en el historial)
+ *   setQuery({ q: '' }, { replace: true })  // quita q sin crear entrada (ideal mientras se escribe)
+ *
+ * @param {Object} params - Parámetros a cambiar.
+ * @param {{ replace?: boolean }} [opciones] - replace: true reemplaza la entrada actual.
+ */
+export function setQuery(params, { replace: reemplazar = false } = {}) {
+  const query = buildQueryString({ ...untrack(() => currentQuery.get()), ...params })
+  // Comparar el significado, no el texto: '?q=a+b' y '?q=a%20b' son la misma query
+  if (new URLSearchParams(query).toString() === new URLSearchParams(window.location.search).toString()) return
+  const destino = untrack(() => currentPath.get()) + query + window.location.hash
+  if (reemplazar) replace(destino)
+  else navigate(destino)
 }
 
 /**
