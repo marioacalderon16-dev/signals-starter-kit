@@ -481,6 +481,7 @@ npm run preview
 
 ## Siguientes pasos
 
+- Explora las [recetas](RECETAS.md): siete ejemplos cortos (formulario con validación, datos de una API, reloj, tema oscuro, rutas con params…).
 - Conecta una API real con `HttpClient` (`src/core/httpClient.js`): soporta timeout, cancelación con `AbortSignal` y errores con `status`.
 - Lee los tests de `src/core/` y `src/features/` como documentación ejecutable de cada pieza.
 - Repasa el [README](../README.md) para la referencia de todas las APIs.

@@ -4,7 +4,7 @@ Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reac
 
 Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima) y 68 tests.
 
-👉 **¿Empiezas?** Sigue el [tutorial de inicio rápido](docs/QUICKSTART.md): construyes una lista de tareas paso a paso en unos 20 minutos.
+👉 **¿Empiezas?** Sigue el [tutorial de inicio rápido](docs/QUICKSTART.md): construyes una lista de tareas paso a paso en unos 20 minutos. ¿Quieres ver de qué es capaz? Mira las [recetas](docs/RECETAS.md): siete ejemplos cortos, de un formulario con validación a datos de una API o un tema oscuro.
 
 ## Stack
 
