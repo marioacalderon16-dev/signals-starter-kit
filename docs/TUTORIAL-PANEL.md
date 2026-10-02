@@ -28,7 +28,7 @@ El tutorial va **de lo macro a lo micro**: primero entiendes el sistema completo
 
 Usaremos [DummyJSON](https://dummyjson.com), una API pública de pruebas. Dos cosas que conviene saber desde ya:
 
-- **Login:** DummyJSON publica usuarios de prueba en su [documentación de autenticación](https://dummyjson.com/docs/auth). Úsalos para entrar.
+- **Login:** DummyJSON publica usuarios de prueba en su [documentación de autenticación](https://dummyjson.com/docs/auth). Usaremos **usuario `emilys`** y **contraseña `emilyspass`**. Ojo: es un nombre de usuario, no un email. Hay más en https://dummyjson.com/users (campos `username` y `password`).
 - **Edición y borrado son simulados:** la API responde como si hubiera guardado o borrado, pero no persiste nada. Al recargar, los datos vuelven a ser los originales. Para aprender es perfecto: la app se comporta igual que con una API real.
 
 ## 2. Arquitectura
@@ -564,7 +564,12 @@ define('LoginPage', () => {
 - El error distingue dos casos. Con `status`, la API respondió (por ejemplo, credenciales incorrectas) y mostramos su mensaje. Sin `status`, no hubo respuesta (red caída o timeout).
 - `role="alert"` hace que los lectores de pantalla anuncien el error.
 
-**Pruébalo:** entra con un usuario de prueba de la [documentación de DummyJSON](https://dummyjson.com/docs/auth). Prueba también con una contraseña incorrecta.
+**Pruébalo:**
+
+1. Abre http://localhost:4321/admin: te lleva a `/login`.
+2. Entra con el usuario de prueba de DummyJSON: **usuario `emilys`**, **contraseña `emilyspass`**.
+3. Vuelves a `/admin/productos` y la cabecera muestra **Emily Johnson**.
+4. Cierra sesión y prueba con una contraseña incorrecta: aparece el mensaje de error que devuelve la API.
 
 ## 7. Listado: búsqueda, paginación y borrado optimista
 
