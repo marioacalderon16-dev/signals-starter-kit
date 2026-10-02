@@ -481,6 +481,7 @@ npm run preview
 
 ## Siguientes pasos
 
+- Da el salto profesional con el [tutorial del panel de administración](TUTORIAL-PANEL.md): login, rutas protegidas, CRUD, tests, CI y despliegue.
 - Explora las [recetas](RECETAS.md): siete ejemplos cortos (formulario con validación, datos de una API, reloj, tema oscuro, rutas con params…).
 - Conecta una API real con `HttpClient` (`src/core/httpClient.js`): soporta timeout, cancelación con `AbortSignal` y errores con `status`.
 - Lee los tests de `src/core/` y `src/features/` como documentación ejecutable de cada pieza.
