@@ -87,7 +87,7 @@ src/
 ├── style.css                # Tailwind
 ├── config/app.js            # Configuración leída de .env
 ├── core/
-│   ├── signal.js            # Reactividad: signal, computed, effect, Batch, untrack, createRoot, onCleanup
+│   ├── signal.js            # Reactividad: signal, computed, effect, Batch, untrack, createRoot, onCleanup, getOwner
 │   └── httpClient.js        # Cliente HTTP sobre fetch (timeout, AbortSignal, errores con status)
 ├── components/
 │   ├── Component.js         # define, c, render, renderApp
@@ -128,6 +128,7 @@ dispose()       // detiene el effect
 - `onCleanup(fn)` registra una limpieza en el effect o root actual.
 - `untrack(fn)` lee signals sin suscribirse.
 - `Batch.run(fn)` agrupa varios cambios en una sola notificación.
+- `getOwner()` devuelve el effect o root actual (o `null`), por ejemplo para registrar `onCleanup` solo si hay dueño.
 - Los effects creados dentro de otro effect (o de un `createRoot`) se liberan automáticamente cuando su dueño se re-ejecuta o se destruye.
 
 ### Crear DOM con `h()`
@@ -146,6 +147,22 @@ h('button', {
 - Hijos `false`, `true`, `null` y `undefined` no se pintan, así que funciona `cond && h(...)`.
 - Un signal hijo puede contener texto o un nodo DOM.
 - `innerHTML` está bloqueado para evitar XSS. Para insertar HTML de confianza usa `dangerouslySetInnerHTML`.
+
+#### Listas con clave: `For`
+
+Para listas que cambian, `For` reutiliza los nodos de los elementos que no cambian en lugar de repintar la lista entera:
+
+```js
+import { h, For } from '@features/dom/dom.js'
+
+h('ul', {},
+  For(tareas, t => t.id, t => h('li', {}, t.texto))
+)
+```
+
+- `For(lista, clave, render)`: `lista` es un signal, un `computed` o una función que devuelve un array; `clave` debe ser única y estable; `render` devuelve **un** elemento.
+- Mismo `id` y mismo objeto → se conserva el nodo (solo se mueve si cambia el orden). Mismo `id` con un objeto nuevo (actualización inmutable) → se re-renderiza solo ese elemento.
+- Los effects de cada elemento se liberan al quitarlo o al desmontar la lista.
 
 ### Componentes
 
@@ -190,6 +207,41 @@ currentQuery.get() // { color: 'rojo' } — reactivo
 - Los enlaces internos `<a href="/...">` navegan sin recargar la página. Los externos, `target="_blank"`, `download` y los clics con modificadores (Ctrl/Cmd…) se dejan al navegador.
 - Las rutas ignoran la query, el hash y la barra final: `/products/7/?x=1` coincide con `/products/:id`.
 - `generateUrl('product', { id: 7 })` construye la URL de una ruta por su nombre.
+
+#### Redirecciones y rutas protegidas
+
+```js
+export const routes = [
+  { path: '/viejo', redirect: '/nuevo' },
+  { path: '/u/:id', redirect: ({ params }) => `/usuarios/${params.id}` },
+  {
+    path: '/admin',
+    component: 'AdminPage',
+    beforeEnter: ({ path }) => (sesion.get() ? true : `/login?volver=${path}`)
+  },
+]
+```
+
+- `redirect` (texto o función) y `beforeEnter` (devuelve una ruta para redirigir; cualquier otro valor deja pasar) reciben `{ path, params, query }`.
+- Las redirecciones usan `replace`: no dejan entradas extra en el historial. Los bucles se cortan a las 10 redirecciones.
+- El guard se evalúa al navegar, no cuando cambia un signal que lee: tras cerrar sesión, llama a `navigate('/login')`.
+
+#### Carga diferida de páginas
+
+```js
+{ path: '/admin', component: 'AdminPage', load: () => import('@components/pages/Admin.lazy.js') }
+```
+
+- La página se descarga en su propio archivo JS la primera vez que se visita la ruta (mientras, se muestra "Cargando…").
+- Nombra esos archivos `*.lazy.js`: el autoregistro de componentes los excluye para que no se incluyan en el bundle principal.
+
+#### Desplegar en una subruta
+
+Si la app vive en una subruta (por ejemplo GitHub Pages: `https://usuario.github.io/mi-app/`), configura `base: '/mi-app/'` en `vite.config.js`. El router la tiene en cuenta: las rutas de la app siguen siendo `/`, `/tareas`…
+
+- `navigate('/tareas')` añade la base sola.
+- Para los `href`, usa `url('/tareas')` (de `@features/router/router.state.js`) o `generateUrl(...)`, que ya incluyen la base. Así los enlaces también funcionan al abrirlos en una pestaña nueva.
+- Para recursos de `public/` desde JS, usa `` `${import.meta.env.BASE_URL}favicon.svg` ``.
 
 ## Convenciones
 
