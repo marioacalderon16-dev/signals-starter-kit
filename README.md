@@ -16,7 +16,39 @@ Incluye una demo (tarjeta del clima) y 65 tests.
 
 Node.js `^20.19.0` o `>=22.12.0` (lo exige Vite 7).
 
+## Crea tu proyecto
+
+Elige una de estas formas de obtener el kit (cambia `mi-app` por el nombre de tu proyecto).
+
+**Opción A — Plantilla de GitHub (recomendada).** Pulsa **[Use this template](https://github.com/marioacalderon16-dev/signals-starter-kit/generate)** en la página del repo. GitHub crea un repositorio nuevo en tu cuenta con una copia limpia, sin el historial de este. Después clónalo:
+
+```bash
+git clone https://github.com/TU-USUARIO/mi-app.git
+cd mi-app
+```
+
+**Opción B — degit (solo terminal, sin historial de git).**
+
+```bash
+npx degit marioacalderon16-dev/signals-starter-kit mi-app
+cd mi-app
+git init
+```
+
+**Opción C — git clone.** Clona y empieza un historial propio (si no, tu proyecto seguiría apuntando a este repo):
+
+```bash
+git clone https://github.com/marioacalderon16-dev/signals-starter-kit.git mi-app
+cd mi-app
+rm -rf .git
+git init
+```
+
+**Opción D — ZIP.** En GitHub, *Code → Download ZIP* y descomprímelo.
+
 ## Puesta en marcha
+
+Dentro de la carpeta del proyecto:
 
 ```bash
 npm install
@@ -24,7 +56,7 @@ cp .env.example .env
 npm run dev
 ```
 
-La app se abre en http://localhost:4321.
+La app se abre en http://localhost:4321. Cambia `"name"` en `package.json` y `VITE_APP_NAME` en `.env` por el nombre de tu app.
 
 ## Scripts
 

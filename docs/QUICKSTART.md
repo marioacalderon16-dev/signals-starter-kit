@@ -2,7 +2,7 @@
 
 En unos 20 minutos vas a construir una **lista de tareas** completa: añadir, marcar, filtrar desde la URL, ver el detalle de cada tarea y conservarlo todo al recargar. Por el camino usarás casi todas las piezas del kit.
 
-> Requisitos: Node.js `^20.19.0` o `>=22.12.0`. Si aún no has instalado el proyecto, mira la sección [Puesta en marcha](../README.md#puesta-en-marcha) del README.
+> Requisitos: Node.js `^20.19.0` o `>=22.12.0`.
 
 ## Por qué signals-starter-kit
 
@@ -39,6 +39,19 @@ src/
         ├── TareasPage.js    # 6. La página
         └── TareaPage.js     # 7. El detalle
 ```
+
+## 0. Consigue el kit
+
+La forma más rápida desde la terminal:
+
+```bash
+npx degit marioacalderon16-dev/signals-starter-kit mi-app
+cd mi-app
+npm install
+cp .env.example .env
+```
+
+¿Prefieres tener tu propio repositorio en GitHub desde el principio? Usa el botón **[Use this template](https://github.com/marioacalderon16-dev/signals-starter-kit/generate)** y clona el repo que se crea. Todas las opciones están en [Crea tu proyecto](../README.md#crea-tu-proyecto).
 
 Arranca el servidor y déjalo corriendo: cada vez que guardes, verás los cambios.
 
