@@ -11,6 +11,7 @@ export {
   untrack, 
   createRoot, 
   onCleanup, 
+  getOwner, 
   Signal, 
   Computed, 
   Effect, 

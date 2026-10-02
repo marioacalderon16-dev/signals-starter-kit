@@ -259,6 +259,12 @@ export const createRoot = (fn) => {
 }
 
 /**
+ * Devuelve el dueño actual (effect o root), o null si no hay ninguno.
+ * Útil para registrar onCleanup solo cuando hay alguien que lo vaya a ejecutar.
+ */
+export const getOwner = () => currentOwner
+
+/**
  * Registra una limpieza en el dueño actual (effect o root).
  * Corre cuando el dueño se re-ejecuta o se destruye.
  */

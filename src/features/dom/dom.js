@@ -1,6 +1,6 @@
 /*  src/core/dom.js  –  Helper DOM 100 % reactivo  */
 
-import { effect } from '@core/signal.js'
+import { effect, createRoot, onCleanup, getOwner } from '@core/signal.js'
 
 /* ----------  utilidades internas  ---------- */
 const isSignal = v => v && typeof v.get === 'function'
@@ -271,6 +271,75 @@ export const text = (content) => {
 // Uso:
 // h('p', { className: 'message' }, text('Texto estático'))
 // h('p', { className: 'message' }, text(dynamicSignal))
+
+/* ----------  7.c  For  –  lista con clave  ---------- */
+// Pinta una lista reutilizando los nodos de los elementos que no cambian.
+// - each:   signal/computed con un array, o una función que lo devuelva
+// - key:    (item) => clave única y estable (p.ej. item.id)
+// - render: (item) => UN elemento del DOM
+// Un item con la misma clave y el mismo objeto conserva su nodo (solo se mueve si cambia
+// el orden); con la misma clave pero un objeto nuevo, se re-renderiza solo ese item.
+// Cada item tiene su propio root: sus effects se liberan al quitarlo o al desmontar la lista.
+export const For = (each, key, render) => {
+  const start = document.createComment('for')
+  const end = document.createComment('/for')
+  const fragment = document.createDocumentFragment()
+  fragment.append(start, end)
+
+  let entries = new Map() // clave → { item, node, dispose }
+
+  const disposeAll = () => {
+    entries.forEach(entry => entry.dispose())
+    entries = new Map()
+  }
+  if (getOwner()) onCleanup(disposeAll)
+
+  effect(() => {
+    const items = typeof each === 'function' ? each() : each.get()
+    const next = new Map()
+    const nodes = []
+
+    items.forEach((item, index) => {
+      let k = key(item)
+      if (next.has(k)) {
+        console.warn(`For: clave duplicada "${k}"; usa una clave única por elemento`)
+        k = `${k}#${index}`
+      }
+
+      let entry = entries.get(k)
+      if (entry && !Object.is(entry.item, item)) {
+        // Misma clave, objeto nuevo: re-renderiza solo este item
+        entry.dispose()
+        entry.node.remove()
+        entry = null
+      }
+      if (!entry) {
+        entry = createRoot(dispose => ({ item, node: render(item), dispose }))
+      }
+
+      entries.delete(k)
+      next.set(k, entry)
+      nodes.push(entry.node)
+    })
+
+    // Los que quedan en `entries` ya no están en la lista
+    entries.forEach(entry => {
+      entry.dispose()
+      entry.node.remove()
+    })
+    entries = next
+
+    // Coloca los nodos en orden entre los comentarios, moviendo solo los que no están en su sitio
+    const parent = end.parentNode
+    let ref = start
+    for (const node of nodes) {
+      if (ref.nextSibling !== node) parent.insertBefore(node, ref.nextSibling)
+      ref = node
+    }
+  })
+
+  return fragment
+}
 
 /* ----------  8.  alias JSX  ---------- */
 export const jsx = h
