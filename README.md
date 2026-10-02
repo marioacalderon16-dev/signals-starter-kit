@@ -88,6 +88,7 @@ src/
 ├── config/app.js            # Configuración leída de .env
 ├── core/
 │   ├── signal.js            # Reactividad: signal, computed, effect, Batch, untrack, createRoot, onCleanup, getOwner
+│   ├── resource.js          # resource(): datos asíncronos con carga, error y cancelación
 │   └── httpClient.js        # Cliente HTTP sobre fetch (timeout, AbortSignal, errores con status)
 ├── components/
 │   ├── Component.js         # define, c, render, renderApp
@@ -129,6 +130,27 @@ dispose()       // detiene el effect
 - `untrack(fn)` lee signals sin suscribirse.
 - `Batch.run(fn)` agrupa varios cambios en una sola notificación.
 - `getOwner()` devuelve el effect o root actual (o `null`), por ejemplo para registrar `onCleanup` solo si hay dueño.
+
+#### Datos asíncronos: `resource`
+
+```js
+import { resource } from '@core/index.js'
+
+const usuario = resource(
+  () => id.get(),                                            // fuente: se rastrea
+  (id, { signal }) => api.get(`/users/${id}`, {}, { signal }) // fetcher: devuelve una promesa
+)
+
+usuario.loading.get() // true mientras carga
+usuario.data.get()    // el último valor recibido
+usuario.error.get()   // el último error (o null)
+usuario.refetch()     // vuelve a pedir
+usuario.mutate(v)     // cambia data en local (p.ej. actualización optimista)
+```
+
+- Cuando cambia la fuente, se vuelve a pedir **y se cancela la petición anterior**: una respuesta lenta nunca pisa a una más reciente. También se cancela al desmontar.
+- Si la fuente devuelve `false`, `null` o `undefined`, no se pide nada (útil para "busca a partir de 2 letras"). Sin fuente, `resource(fetcher)` pide una sola vez.
+- Mientras recarga y si falla, `data` conserva el valor anterior. Un `AbortError` no cuenta como error.
 - Los effects creados dentro de otro effect (o de un `createRoot`) se liberan automáticamente cuando su dueño se re-ejecuta o se destruye.
 
 ### Crear DOM con `h()`
@@ -163,6 +185,32 @@ h('ul', {},
 - `For(lista, clave, render)`: `lista` es un signal, un `computed` o una función que devuelve un array; `clave` debe ser única y estable; `render` devuelve **un** elemento.
 - Mismo `id` y mismo objeto → se conserva el nodo (solo se mueve si cambia el orden). Mismo `id` con un objeto nuevo (actualización inmutable) → se re-renderiza solo ese elemento.
 - Los effects de cada elemento se liberan al quitarlo o al desmontar la lista.
+
+#### Mostrar u ocultar: `Show`
+
+```js
+import { h, Show } from '@features/dom/dom.js'
+
+Show(usuario.loading, () => h('p', {}, 'Cargando…'))
+Show(() => carrito.get().length > 0, () => h('ul', {}, '…'), () => h('p', {}, 'El carrito está vacío'))
+```
+
+- La condición es un signal, un `computed` o una función. La segunda vista es opcional.
+- Solo reconstruye cuando la condición pasa de verdadera a falsa (o al revés). Mientras siga siendo verdadera, la vista conserva su nodo y su estado, y sus effects se liberan al ocultarse.
+
+#### Formularios: `bind:value` y `bind:checked`
+
+```js
+const email = signal('')
+const acepto = signal(false)
+
+h('input', { type: 'email', 'bind:value': email })            // input ↔ signal
+h('input', { type: 'checkbox', 'bind:checked': acepto })
+h('select', { 'bind:value': pais }, h('option', { value: 'es' }, 'España'))
+```
+
+- Enlace en los dos sentidos: al escribir se actualiza el signal; al cambiar el signal se actualiza el campo. Funciona en `input`, `textarea` y `select`.
+- Solo reescribe el campo si el valor es distinto, así que no mueve el cursor mientras escribes.
 
 ### Componentes
 
