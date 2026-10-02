@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { resource } from './resource.js'
-import { signal, createRoot } from './signal.js'
+import { signal, createRoot, effect } from './signal.js'
 
 const tick = () => new Promise(r => setTimeout(r))
 const diferido = () => { let resolve, reject; const p = new Promise((a, b) => { resolve = a; reject = b }); return { p, resolve, reject } }
@@ -103,5 +103,20 @@ describe('resource', () => {
     otro.set(1)
     await tick()
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('regresiones R1 (resource)', () => {
+  it('refetch() llamado dentro de un effect no provoca un bucle', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let n = 0
+    createRoot(() => {
+      const r = resource(async () => ++n)
+      effect(() => { r.refetch() })
+    })
+    await tick(); await tick()
+    expect(n).toBeLessThanOrEqual(2)
+    expect(err).not.toHaveBeenCalled()
+    err.mockRestore()
   })
 })

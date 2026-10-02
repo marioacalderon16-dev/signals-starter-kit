@@ -82,7 +82,7 @@ export function resource(source, fetcher) {
     data,
     error,
     loading,
-    refetch: () => version.set(version.get() + 1),
+    refetch: () => version.set(untrack(() => version.get()) + 1), // untrack: llamarlo desde un effect no crea un bucle
     mutate: (valor) => data.set(valor) // actualización local (p.ej. optimista)
   }
 }
