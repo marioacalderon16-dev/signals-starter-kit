@@ -256,6 +256,43 @@ currentQuery.get() // { color: 'rojo' } — reactivo
 - Las rutas ignoran la query, el hash y la barra final: `/products/7/?x=1` coincide con `/products/:id`.
 - `generateUrl('product', { id: 7 })` construye la URL de una ruta por su nombre.
 
+#### Enlaces: `Link`
+
+```js
+import { Link } from '@features/router/Link.js'
+
+Link({ to: '/admin/productos', activeClass: 'font-bold', prefetch: true }, 'Productos')
+h(Link, { to: '/acerca', className: 'text-sm' }, 'Acerca')
+```
+
+- Genera un `<a>` con la base de despliegue en el `href`; el clic navega sin recargar.
+- `activeClass` se aplica cuando la ruta actual es `to` o cuelga de ella (`/admin` está activo en `/admin/usuarios`). Con `exact: true`, solo si coincide; `'/'` es exacto por defecto. La página exacta lleva además `aria-current="page"`.
+- `prefetch: true` descarga la página diferida (`load`) al pasar el ratón o enfocar el enlace: al hacer clic ya está lista.
+
+#### Título y layout por ruta
+
+```js
+{ path: '/admin/productos', component: 'ProductosPage', title: 'Productos', layout: 'AdminLayout' },
+{ path: '/admin/productos/:id', component: 'EditarPage', title: ({ params }) => `Producto ${params.id}`, layout: 'AdminLayout' }
+```
+
+```js
+define('AdminLayout', ({ contenido, title }) =>
+  h('div', {},
+    h('header', {}, /* menú, usuario… */),
+    h('h1', {}, title),   // title es un signal: cambia con cada página
+    contenido             // aquí se monta la página
+  )
+)
+```
+
+- `title` (texto o función) pone `Título · nombre de la app` en la pestaña. Las rutas sin `title` muestran el nombre de la app.
+- `layout` envuelve la página. Si dos rutas seguidas comparten layout, **no se vuelve a montar**: solo cambia la página, y la cabecera conserva su estado (un buscador, un menú abierto…).
+
+#### Transiciones entre páginas
+
+Si el navegador soporta la [View Transitions API](https://developer.mozilla.org/docs/Web/API/View_Transition_API), el cambio de página se anima con un fundido, sin escribir nada. Se omite si el usuario tiene activado "reducir movimiento", al cambiar solo los parámetros de la misma página o en rutas con `transition: false`. La animación se personaliza con CSS (`::view-transition-old(root)`, `::view-transition-new(root)`).
+
 #### Redirecciones y rutas protegidas
 
 ```js
