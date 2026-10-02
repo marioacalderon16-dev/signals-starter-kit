@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { h, Show, For } from './dom.js'
-import { signal, createRoot } from '@core/signal.js'
+import { signal, createRoot, computed } from '@core/signal.js'
 
 const tick = () => new Promise(r => setTimeout(r))
 // Los hijos reactivos con nodos usan dos comentarios como anclas: se ignoran al comparar HTML
@@ -23,11 +23,14 @@ describe('bind:value / bind:checked', () => {
   it('no reescribe el input si el valor ya coincide (no mueve el cursor)', async () => {
     const texto = signal('abc')
     const { el } = montar(() => h('input', { 'bind:value': texto }))
+    el.value = 'abcd'                   // el usuario escribió, pero el signal aún no lo sabe
     const set = vi.spyOn(el, 'value', 'set')
-    el.dispatchEvent(new Event('input')) // el valor no cambia
-    texto.set('abc')
+    texto.set('abcd')                   // el signal cambia al mismo valor que ya tiene el input
     await tick()
-    expect(set).not.toHaveBeenCalled()
+    expect(set).not.toHaveBeenCalled()  // no se reescribe: el cursor no se mueve
+    texto.set('xyz')
+    await tick()
+    expect(set).toHaveBeenCalledTimes(1) // un valor distinto sí se escribe
   })
 
   it('bind:value en textarea y select', () => {
@@ -221,5 +224,40 @@ describe('regresiones R1 (dom)', () => {
     opciones.set(['es', 'mx']); await tick()
     expect(el.value).toBe('mx')
     expect(pais.get()).toBe('mx')
+  })
+})
+
+describe('cobertura R2 (dom)', () => {
+  it('bind:value en <select>: elegir otra opción (evento change) actualiza el signal', () => {
+    const pais = signal('es')
+    const { el } = montar(() => h('select', { 'bind:value': pais }, h('option', { value: 'es' }, 'ES'), h('option', { value: 'mx' }, 'MX')))
+    el.value = 'mx'
+    el.dispatchEvent(new Event('change'))
+    expect(pais.get()).toBe('mx')
+  })
+
+  it('Show: al volver a la vista principal se liberan los effects de la alternativa', async () => {
+    const visible = signal(false)
+    const texto = signal('alt')
+    const { el } = montar(() => h('div', {}, Show(visible, () => h('p', {}, 'vista'), () => h('p', {}, texto))))
+    expect(texto.subs.size).toBe(1)
+    visible.set(true); await tick()
+    expect(el.textContent).toBe('vista')
+    expect(texto.subs.size).toBe(0)
+  })
+})
+
+describe('cobertura R2 (reactiveChild)', () => {
+  it('si el valor vuelve a ser el mismo nodo, no lo reinserta en el DOM', async () => {
+    const otro = signal(0)
+    const nodo = h('b', {}, 'fijo')
+    const { el } = montar(() => h('div', {}, computed(() => (otro.get(), nodo))))
+    const cambios = []
+    const observador = new MutationObserver(m => cambios.push(...m))
+    observador.observe(el, { childList: true, subtree: true })
+    otro.set(1); await tick() // el computed se recalcula y devuelve el mismo nodo
+    await Promise.resolve()
+    observador.disconnect()
+    expect(cambios).toEqual([])
   })
 })

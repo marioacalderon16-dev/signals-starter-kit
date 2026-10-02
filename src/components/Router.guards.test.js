@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { define, c } from './Component.js'
 import { signal, createRoot } from '@core/signal.js'
 import { navigate, currentPath } from '@features/router/router.state.js'
@@ -41,6 +41,8 @@ beforeAll(async () => {
 })
 
 describe('Router: redirect y beforeEnter', () => {
+  beforeEach(async () => { navigate('/'); await settle() }) // independiente del orden de los tests
+
   it('redirect con texto reemplaza la ruta (sin entrada extra en el historial)', async () => {
     navigate('/')
     const largo = history.length
@@ -97,8 +99,23 @@ describe('Router: redirect y beforeEnter', () => {
     expect(root.textContent).toContain('Demasiadas redirecciones')
     expect(err).toHaveBeenCalled()
     err.mockRestore()
+    navigate('/vieja') // justo después del bucle: el contador se reinició y una redirección normal funciona
+    await settle()
+    expect(root.textContent).toBe('página:Nueva')
     navigate('/')
     await settle()
     expect(root.textContent).toBe('página:Inicio')
+  })
+})
+
+describe('cobertura R2 (guards)', () => {
+  it('muchas navegaciones válidas con una redirección cada una no cuentan como bucle', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    for (let i = 0; i < 12; i++) {
+      navigate('/vieja')
+      await settle()
+      expect(root.textContent).toBe('página:Nueva')
+    }
+    expect(err).not.toHaveBeenCalled()
   })
 })

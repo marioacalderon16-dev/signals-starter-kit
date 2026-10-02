@@ -120,3 +120,16 @@ describe('regresiones R1 (resource)', () => {
     err.mockRestore()
   })
 })
+
+describe('cobertura R2 (resource)', () => {
+  it('tras un error, una recarga con éxito vuelve a poner error a null', async () => {
+    let falla = true
+    const r = createRoot(() => resource(async () => { if (falla) throw new Error('caído'); return 'ok' }))
+    await tick()
+    expect(r.error.get()?.message).toBe('caído')
+    falla = false
+    r.refetch()
+    await tick()
+    expect([r.error.get(), r.data.get()]).toEqual([null, 'ok'])
+  })
+})

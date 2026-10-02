@@ -83,3 +83,14 @@ describe('iniciarDevtools', () => {
     expect(devtools.onUpdate).toBeNull()
   })
 })
+
+describe('cobertura R2 (devtools)', () => {
+  it('parar() detiene el intervalo de la insignia', () => {
+    vi.useFakeTimers()
+    const parar = iniciarDevtools()
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    parar()
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+})

@@ -17,6 +17,11 @@ export default defineConfig({
   // Vitest reutiliza esta config (alias incluidos). jsdom simula el DOM.
   test: {
     environment: 'jsdom',
+    // Tras cada test se restauran los espías (vi.spyOn), las variables (vi.stubEnv) y los
+    // globales (vi.stubGlobal): un test que falla no deja mocks puestos para los siguientes
+    restoreMocks: true,
+    unstubEnvs: true,
+    unstubGlobals: true,
   },
 
 /* ================================================================== */

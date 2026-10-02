@@ -4,6 +4,8 @@ import { h } from '@features/dom/dom.js'
 import { createRoot } from '@core/signal.js'
 import { navigate } from '@features/router/router.state.js'
 
+const cargaDiferida = vi.hoisted(() => ({ resolver: null }))
+
 vi.mock('@features/router/routes.config.js', () => ({
   routes: [
     { path: '/', component: 'Inicio' },
@@ -11,8 +13,9 @@ vi.mock('@features/router/routes.config.js', () => ({
     { path: '/p/:id', component: 'Producto', title: ({ params }) => `Producto ${params.id}`, layout: 'Marco' },
     { path: '/lista', component: 'Lista', title: 'Lista', layout: 'Marco' },
     { path: '/rapida', component: 'Rapida', transition: false },
+    { path: '/buscar', component: 'Acerca', title: ({ query }) => `Buscar: ${query.q ?? ''}` },
     { path: '/rota', component: 'Rota', title: () => { throw new Error('título roto') } },
-    { path: '/diferida', component: 'Diferida', title: 'Diferida', layout: 'Marco', load: () => new Promise(r => setTimeout(() => { define('Diferida', () => h('p', {}, 'página:Diferida')); r() }, 30)) },
+    { path: '/diferida', component: 'Diferida', title: 'Diferida', layout: 'Marco', load: () => new Promise(r => { cargaDiferida.resolver = r }) },
   ]
 }))
 
@@ -100,6 +103,8 @@ describe('Router: View Transitions', () => {
 
   it('si llega otra navegación antes del callback, se queda la última', async () => {
     navigate('/'); await settle()
+    const montajesAcerca = vi.fn(p('Acerca'))
+    define('Acerca', montajesAcerca)
     const pendientes = []
     document.startViewTransition = vi.fn(cb => { pendientes.push(cb); return {} })
     navigate('/acerca'); await settle()
@@ -107,6 +112,8 @@ describe('Router: View Transitions', () => {
     pendientes.forEach(cb => cb())
     await settle()
     expect(root.textContent).toBe('Listapágina:Lista')
+    expect(montajesAcerca).not.toHaveBeenCalled() // la transición obsoleta se descartó
+    define('Acerca', p('Acerca'))
   })
 })
 
@@ -128,8 +135,17 @@ describe('regresiones R1 (Router.h2)', () => {
     expect(root.querySelector('.marco')).toBe(marco)
     expect(marco.textContent).toBe('DiferidaCargando…') // el título ya es el de la ruta que carga
     expect(document.title).toBe('Diferida · signals-starter-kit')
-    await new Promise(r => setTimeout(r, 60)); await settle()
+    define('Diferida', () => h('p', {}, 'página:Diferida'))
+    cargaDiferida.resolver() // la carga termina cuando el test quiere
+    await settle()
     expect(root.querySelector('.marco')).toBe(marco)
     expect(marco.textContent).toBe('Diferidapágina:Diferida')
+  })
+})
+
+describe('cobertura R2 (title)', () => {
+  it('title puede usar la query', async () => {
+    navigate('/buscar?q=phone'); await settle()
+    expect(document.title).toBe('Buscar: phone · signals-starter-kit')
   })
 })

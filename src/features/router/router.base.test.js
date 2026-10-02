@@ -3,12 +3,13 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
 // Simula una app desplegada en una subruta (vite.config: base: '/app/')
 vi.stubEnv('BASE_URL', '/app/')
 
-let base, state, routes
+let base, state, routes, rutaInicial
 
 beforeAll(async () => {
   history.replaceState(null, '', '/app/')
   base = await import('./router.base.js')
   state = await import('./router.state.js')
+  rutaInicial = state.currentPath.get() // capturada antes de que ningún test navegue
   routes = await import('./routes.config.js')
 })
 
@@ -29,7 +30,7 @@ describe('router con base /app/', () => {
   })
 
   it('la ruta inicial /app/ se lee como /', () => {
-    expect(state.currentPath.get()).toBe('/')
+    expect(rutaInicial).toBe('/')
   })
 
   it('navigate usa rutas de la app y escribe la URL con base', () => {
@@ -57,8 +58,11 @@ describe('router con base /app/', () => {
     a.setAttribute('href', href)
     document.body.appendChild(a)
     const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+    // jsdom no implementa la navegación real: se anota si el router la impidió y luego se cancela
+    let impedido
+    window.addEventListener('click', (e) => { impedido = e.defaultPrevented; e.preventDefault() }, { once: true })
     a.dispatchEvent(ev)
-    return ev
+    return { defaultPrevented: impedido }
   }
 
   it('intercepta enlaces dentro de la base y deja pasar los de fuera', () => {
@@ -67,5 +71,17 @@ describe('router con base /app/', () => {
     expect(state.currentPath.get()).toBe('/y')
     expect(click('/fuera').defaultPrevented).toBe(false)
     expect(state.currentPath.get()).toBe('/y')
+  })
+})
+
+describe('Link con base /app/', () => {
+  it('el href lleva la base y el clic navega a la ruta de la app', async () => {
+    const { Link } = await import('./Link.js')
+    const a = Link({ to: '/tareas?x=1' }, 'Tareas')
+    document.body.appendChild(a)
+    expect(a.getAttribute('href')).toBe('/app/tareas?x=1')
+    a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }))
+    expect(state.currentPath.get()).toBe('/tareas')
+    expect(location.pathname + location.search).toBe('/app/tareas?x=1')
   })
 })

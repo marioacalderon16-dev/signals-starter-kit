@@ -4,31 +4,33 @@ import { createRoot, getStats } from '@core/signal.js'
 import { navigate } from '@features/router/router.state.js'
 
 const defineP = (name) => define(name, () => Object.assign(document.createElement('p'), { textContent: `página:${name}` }))
-const espera = (ms) => new Promise(r => setTimeout(r, ms))
 
-const cargas = vi.hoisted(() => ({ perezosa: 0 }))
+// Cada load() devuelve una promesa que el test resuelve o rechaza a mano: sin esperas reales
+const cargas = vi.hoisted(() => {
+  const pendientes = {}
+  const contador = {}
+  const diferida = (nombre) => () => {
+    contador[nombre] = (contador[nombre] ?? 0) + 1
+    return new Promise((resolve, reject) => { pendientes[nombre] = { resolve, reject } })
+  }
+  return { pendientes, contador, diferida }
+})
 
 vi.mock('@features/router/routes.config.js', () => ({
   routes: [
     { path: '/', component: 'Inicio', name: 'inicio' },
-    {
-      path: '/perezosa', component: 'Perezosa', name: 'perezosa',
-      load: async () => { cargas.perezosa++; await espera(20); defineP('Perezosa') }
-    },
-    {
-      path: '/lenta', component: 'Lenta', name: 'lenta',
-      load: async () => { await espera(60); defineP('Lenta') }
-    },
-    {
-      path: '/unica', component: 'Unica', name: 'unica',
-      load: async () => { await espera(40); defineP('Unica') }
-    },
-    {
-      path: '/rota', component: 'Rota', name: 'rota',
-      load: () => Promise.reject(new Error('chunk no encontrado'))
-    },
+    { path: '/perezosa', component: 'Perezosa', name: 'perezosa', load: cargas.diferida('Perezosa') },
+    { path: '/lenta', component: 'Lenta', name: 'lenta', load: cargas.diferida('Lenta') },
+    { path: '/unica', component: 'Unica', name: 'unica', load: cargas.diferida('Unica') },
+    { path: '/rota', component: 'Rota', name: 'rota', load: cargas.diferida('Rota') },
+    { path: '/rota-lenta', component: 'RotaLenta', name: 'rota-lenta', load: cargas.diferida('RotaLenta') },
   ]
 }))
+
+// Deja correr las microtasks (effects del router y callbacks de las promesas)
+const microtasks = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }
+const terminar = async (nombre) => { defineP(nombre); cargas.pendientes[nombre].resolve(); await microtasks() }
+const fallar = async (nombre) => { cargas.pendientes[nombre].reject(new Error('chunk no encontrado')); await microtasks() }
 
 let root
 
@@ -42,52 +44,64 @@ beforeAll(async () => {
 describe('Router: rutas con carga diferida (load)', () => {
   it('muestra "Cargando…" y luego la página; la segunda visita no vuelve a cargar', async () => {
     navigate('/perezosa')
-    await espera(0)
+    await microtasks()
     expect(root.textContent).toBe('Cargando…')
-    await espera(40)
+    await terminar('Perezosa')
     expect(root.textContent).toBe('página:Perezosa')
 
     navigate('/')
-    await espera(0)
+    await microtasks()
     navigate('/perezosa')
-    await espera(0)
+    await microtasks()
     expect(root.textContent).toBe('página:Perezosa')
-    expect(cargas.perezosa).toBe(1)
+    expect(cargas.contador.Perezosa).toBe(1)
   })
 
   it('si se navega a otra ruta durante la carga, el resultado se descarta', async () => {
     navigate('/lenta')
-    await espera(0)
+    await microtasks()
     navigate('/')
-    await espera(100)
+    await microtasks()
+    await terminar('Lenta') // la carga termina tarde
     expect(root.textContent).toBe('página:Inicio')
   })
 
   it('si la carga falla, muestra un error', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     navigate('/rota')
-    await espera(10)
+    await microtasks()
+    await fallar('Rota')
     expect(root.textContent).toBe('Error al cargar la página')
     expect(err).toHaveBeenCalled()
-    err.mockRestore()
     navigate('/')
-    await espera(0)
+    await microtasks()
     expect(root.textContent).toBe('página:Inicio')
+  })
+
+  it('un error de una carga obsoleta (ya se navegó a otra ruta) se descarta sin mostrar ni registrar nada', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    navigate('/rota-lenta')
+    await microtasks()
+    navigate('/')
+    await microtasks()
+    await fallar('RotaLenta')
+    expect(root.textContent).toBe('página:Inicio')
+    expect(err).not.toHaveBeenCalled()
   })
 })
 
 describe('regresiones R1 (Router.lazy)', () => {
   it('si el Router se desmonta durante una carga diferida, no monta nada después', async () => {
     navigate('/')
-    await espera(0)
+    await microtasks()
     let dispose
     const otro = document.createElement('div')
     createRoot(d => { dispose = d; otro.appendChild(c('Router')) })
-    navigate('/unica')                       // empieza a cargar (40 ms; nunca cargada antes)
-    await espera(0)
+    navigate('/unica')                       // empieza a cargar (nunca cargada antes)
+    await microtasks()
     const vivos = getStats().effects
     dispose()                               // se desmonta antes de que termine
-    await espera(100)
+    await terminar('Unica')
     expect(otro.textContent).not.toContain('página:Unica')
     expect(getStats().effects).toBeLessThan(vivos)
   })

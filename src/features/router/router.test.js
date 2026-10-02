@@ -75,8 +75,12 @@ describe('intercepción de enlaces <a>', () => {
     a.appendChild(document.createElement('span')) // el clic suele venir de un hijo
     document.body.appendChild(a)
     const ev = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ...init })
+    // jsdom no implementa la navegación real: se anota si el router la impidió y luego se cancela
+    let impedido
+    const anotar = (e) => { impedido = e.defaultPrevented; e.preventDefault() }
+    window.addEventListener('click', anotar, { once: true })
     a.firstChild.dispatchEvent(ev)
-    return ev
+    return { defaultPrevented: impedido }
   }
 
   it('enlace interno: navega sin recargar', () => {

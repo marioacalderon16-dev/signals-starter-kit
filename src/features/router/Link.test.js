@@ -77,5 +77,25 @@ describe('Link', () => {
     const a = montar(() => Link({ to: '/admin', prefetch: true }, 'Admin'))
     expect(() => a.dispatchEvent(new Event('mouseenter'))).not.toThrow()
     await tick()
+    a.dispatchEvent(new Event('mouseenter')) // tras un fallo, se reintenta
+    expect(cargarAdmin).toHaveBeenCalledTimes(2)
+  })
+
+  it('una ruta no se activa por un hermano con prefijo común (/admin vs /administracion)', async () => {
+    const a = montar(() => Link({ to: '/admin', activeClass: 'on' }, 'Admin'))
+    navigate('/administracion')
+    await tick()
+    expect(a.classList.contains('on')).toBe(false)
+  })
+})
+
+describe('cobertura R2 (Link)', () => {
+  it('si load() lanza de forma síncrona, el prefetch también se reintenta', () => {
+    cargarAdmin.mockClear()
+    cargarAdmin.mockImplementationOnce(() => { throw new Error('síncrono') })
+    const a = montar(() => Link({ to: '/admin', prefetch: true }, 'Admin'))
+    a.dispatchEvent(new Event('mouseenter'))
+    a.dispatchEvent(new Event('mouseenter'))
+    expect(cargarAdmin).toHaveBeenCalledTimes(2)
   })
 })
