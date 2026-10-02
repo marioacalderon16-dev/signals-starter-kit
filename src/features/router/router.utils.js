@@ -23,7 +23,8 @@ export function matchRoute(path) {
       return { 
         component: route.component, 
         params,
-        name: route.name 
+        name: route.name,
+        route // definición completa (redirect, beforeEnter, load…)
       }
     }
   }

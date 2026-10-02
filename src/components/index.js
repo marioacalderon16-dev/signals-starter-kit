@@ -7,9 +7,10 @@ import './Router.js'
 // Componente raíz de la aplicación
 import './App.js'
 
-// Registra los componentes de todas las subcarpetas (excluye este archivo y los tests)
+// Registra los componentes de todas las subcarpetas (excluye este archivo, los tests
+// y los *.lazy.js, que se cargan bajo demanda con `load` en la ruta)
 const componentModules = import.meta.glob(
-  ['./**/*.js', '!./index.js', '!./**/*.test.js'],
+  ['./**/*.js', '!./index.js', '!./**/*.test.js', '!./**/*.lazy.js'],
   { eager: true }
 )
 
