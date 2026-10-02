@@ -67,6 +67,7 @@ La app se abre en http://localhost:4321. Cambia `"name"` en `package.json` y `VI
 | `npm run preview` | Sirve el build de `dist/` |
 | `npm test` | Ejecuta los tests una vez |
 | `npm run test:watch` | Tests en modo watch |
+| `npm run new …` | Genera páginas, componentes y features (ver [Generador de código](#generador-de-código)) |
 
 ## Variables de entorno
 
@@ -78,6 +79,7 @@ Definidas en `.env` (no se versiona; usa `.env.example` como plantilla):
 | `VITE_APP_VERSION` | Versión de la app |
 | `VITE_DEV_MODE` | Activa el modo desarrollo del logger |
 | `VITE_LOG_LEVEL` | `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` o `SILENT` |
+| `VITE_DEVTOOLS` | Pon `false` para ocultar el [panel de devtools](#devtools) en desarrollo |
 
 ## Estructura
 
@@ -102,7 +104,10 @@ src/
 │   ├── router/              # Estado, utilidades y tabla de rutas
 │   ├── contador/            # Estado del contador
 │   └── weather/             # Estado del clima
-└── shared/utils/            # logger, persist (signals en localStorage)
+├── shared/
+│   ├── utils/               # logger, persist (signals en localStorage)
+│   └── devtools/            # Panel de desarrollo (solo en npm run dev)
+scripts/new.js               # Generador de código: npm run new
 ```
 
 Alias de importación: `@` (src), `@core`, `@components`, `@features`, `@shared`.
@@ -130,6 +135,7 @@ dispose()       // detiene el effect
 - `untrack(fn)` lee signals sin suscribirse.
 - `Batch.run(fn)` agrupa varios cambios en una sola notificación.
 - `getOwner()` devuelve el effect o root actual (o `null`), por ejemplo para registrar `onCleanup` solo si hay dueño.
+- `getStats()` devuelve `{ effects }`: cuántos effects hay vivos (útil para detectar fugas).
 
 #### Datos asíncronos: `resource`
 
@@ -327,6 +333,37 @@ Si la app vive en una subruta (por ejemplo GitHub Pages: `https://usuario.github
 - `navigate('/tareas')` añade la base sola.
 - Para los `href`, usa `url('/tareas')` (de `@features/router/router.state.js`) o `generateUrl(...)`, que ya incluyen la base. Así los enlaces también funcionan al abrirlos en una pestaña nueva.
 - Para recursos de `public/` desde JS, usa `` `${import.meta.env.BASE_URL}favicon.svg` ``.
+
+## Generador de código
+
+Crea archivos que siguen las convenciones del kit, sin sobrescribir nunca nada existente:
+
+```bash
+npm run new page Productos
+npm run new -- page Admin --lazy
+npm run new -- page MisPedidos --path /cuenta/pedidos
+npm run new component TarjetaProducto
+npm run new feature carrito
+```
+
+| Comando | Crea |
+|---|---|
+| `page Productos` | `components/pages/ProductosPage.js` y la ruta `/productos` (con `title`) en `routes.config.js` |
+| `page Admin --lazy` | `AdminPage.lazy.js` y su ruta con `load` (se descarga bajo demanda) |
+| `page … --path /ruta` | La ruta con el path que elijas |
+| `component TarjetaProducto` | `components/tarjeta-producto/TarjetaProducto.js` y su test |
+| `feature carrito` | `features/carrito/carrito.state.js` y su test |
+
+Las opciones que empiezan por `--` necesitan el `--` de npm delante (`npm run new -- page Admin --lazy`); si no, npm se las queda y el script no las recibe.
+
+## Devtools
+
+En `npm run dev` aparece una insignia en la esquina inferior derecha:
+
+- **⚡ N effects:** cuántos effects hay vivos. Si al navegar de un lado a otro el número no para de crecer, hay una fuga.
+- **Resaltado:** cada elemento que actualiza un signal parpadea en ámbar. Al pulsar `+` en el contador, verás que solo cambian el número y el "Doble": la reactividad de grano fino, a la vista. Un clic en la insignia activa o desactiva el resaltado; la preferencia se recuerda.
+
+No se incluye en el build de producción. Para ocultarla también en desarrollo, pon `VITE_DEVTOOLS=false` en `.env`.
 
 ## Convenciones
 
