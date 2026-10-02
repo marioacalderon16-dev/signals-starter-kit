@@ -18,6 +18,12 @@ describe('Router', () => {
     expect(root.textContent).toContain('Fusagasuga')
   })
 
+  it('la ruta inicial es la presentación y mantiene la demo del clima', () => {
+    expect(root.querySelector('h1').textContent).toContain('signals-starter-kit')
+    expect(root.textContent).toContain('npx degit marioacalderon16-dev/signals-starter-kit mi-app')
+    expect(root.querySelector('button').textContent).toBe('Actualizar') // botón de WeatherCard
+  })
+
   it('muestra 404 en una ruta desconocida y lo quita al volver', async () => {
     navigate('/no-existe')
     await tick()
