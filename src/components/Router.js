@@ -1,16 +1,28 @@
 // src/components/Router.js
 // Componente router que maneja la navegación
 
-import { effect, onCleanup, untrack } from '@core/index.js'
+import { signal, effect, onCleanup, untrack } from '@core/index.js'
 import { define, c, render, getComponent } from '@components/Component.js'
 import { currentPath, currentQuery, replace, normalizePath } from '@features/router/router.state.js'
 import { matchRoute } from '@features/router/router.utils.js'
 import { logger } from '@shared/utils/logger.js'
+import config from '@/config/app.js'
 
 const log = logger.create('ROUTER')
 
 // Máximo de redirecciones seguidas antes de considerarlo un bucle
 const MAX_REDIRECTS = 10
+
+/**
+ * ¿Animar este cambio de página con la View Transitions API?
+ * Solo si el navegador la soporta, la ruta no la desactiva (transition: false)
+ * y el usuario no pidió reducir el movimiento.
+ */
+function usarTransicion(route) {
+  return route.transition !== false &&
+    typeof document.startViewTransition === 'function' &&
+    !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+}
 
 /**
  * Devuelve la ruta a la que hay que redirigir, o null si se puede mostrar la ruta.
@@ -38,46 +50,93 @@ define('Router', () => {
   container.className = 'router-container'
 
   let currentRoute = null
-  let currentRenderer = null
+  let currentRenderer = null // página actual
+  let layoutRenderer = null  // layout actual (se conserva entre rutas que lo comparten)
+  let layoutName = null
+  let slot = null            // hueco del layout donde se monta la página
+  const titulo = signal('')  // título de la ruta, para que el layout lo muestre
   let redirects = 0
-  let navegacion = 0 // id de la navegación actual: descarta cargas diferidas obsoletas
+  let navegacion = 0 // id de la navegación actual: descarta cargas y transiciones obsoletas
 
-  // Monta (o actualiza) la página de una ruta ya resuelta
-  const montar = (routeMatch) => {
-    if (currentRoute && currentRoute.component === routeMatch.component) {
-      // Si es el mismo componente, solo actualizamos las props
-      if (currentRenderer) {
-        currentRenderer.update({ params: routeMatch.params })
+  const desmontarLayout = () => {
+    if (layoutRenderer) layoutRenderer.cleanup()
+    layoutRenderer = null
+    layoutName = null
+    slot = null
+  }
+
+  // route.title: texto o ({ params, query }) => texto
+  const aplicarTitulo = (routeMatch) => {
+    const { title } = routeMatch.route
+    const texto = typeof title === 'function'
+      ? untrack(() => title({ params: routeMatch.params, query: currentQuery.get() }))
+      : title
+    titulo.set(texto ?? '')
+    document.title = texto ? `${texto} · ${config.name}` : config.name
+  }
+
+  // Monta la página (y su layout si cambia) en el contenedor
+  const montarPagina = (routeMatch) => {
+    if (currentRenderer) currentRenderer.cleanup()
+    currentRenderer = null
+
+    const nombreLayout = routeMatch.route.layout ?? null
+    if (nombreLayout !== layoutName) {
+      desmontarLayout()
+      container.textContent = ''
+      if (nombreLayout) {
+        // El layout recibe { contenido, title }: un hueco para la página y el título como signal
+        slot = document.createElement('div')
+        slot.style.display = 'contents'
+        layoutRenderer = render((props) => c(nombreLayout, props), container, { contenido: slot, title: titulo })
+        layoutName = nombreLayout
       }
-      return
+    } else if (!nombreLayout) {
+      // Quita el texto 404 / "Cargando…" si lo había
+      container.textContent = ''
     }
-    // Si es un componente diferente, limpiamos el anterior y renderizamos el nuevo
-    if (currentRenderer) {
-      currentRenderer.cleanup()
-    }
-    // Quita el texto 404 / "Cargando…" si lo había
-    container.textContent = ''
 
     currentRenderer = render(
       (props) => c(routeMatch.component, props),
-      container,
+      slot ?? container,
       { params: routeMatch.params }
     )
-
     currentRoute = routeMatch
   }
 
-  // Desmonta la página actual y muestra un texto (404, carga, error…)
+  // Monta (o actualiza) la página de una ruta ya resuelta
+  const montar = (routeMatch, id) => {
+    aplicarTitulo(routeMatch)
+
+    if (currentRoute && currentRoute.component === routeMatch.component) {
+      // Si es el mismo componente, solo actualizamos las props
+      if (currentRenderer) currentRenderer.update({ params: routeMatch.params })
+      currentRoute = routeMatch
+      return
+    }
+
+    // Si llega otra navegación antes de que corra la transición, se descarta esta
+    const cambiar = () => {
+      if (id === navegacion) montarPagina(routeMatch)
+    }
+    const primeraCarga = !currentRoute && !layoutName
+    if (!primeraCarga && usarTransicion(routeMatch.route)) document.startViewTransition(cambiar)
+    else cambiar()
+  }
+
+  // Desmonta la página (y el layout) y muestra un texto (404, carga, error…)
   const mostrarTexto = (texto) => {
     if (currentRenderer) currentRenderer.cleanup()
     currentRenderer = null
     currentRoute = null
+    desmontarLayout()
     container.textContent = texto
   }
 
   // Si el Router se desmonta, desmonta también la página actual
   onCleanup(() => {
     if (currentRenderer) currentRenderer.cleanup()
+    desmontarLayout()
   })
 
   effect(() => {
@@ -115,7 +174,7 @@ define('Router', () => {
       mostrarTexto('Cargando…')
       routeMatch.route.load()
         .then(() => {
-          if (id === navegacion) montar(routeMatch) // si ya se navegó a otra ruta, se descarta
+          if (id === navegacion) montar(routeMatch, id) // si ya se navegó a otra ruta, se descarta
         })
         .catch((error) => {
           if (id !== navegacion) return
@@ -125,7 +184,7 @@ define('Router', () => {
       return
     }
 
-    montar(routeMatch)
+    montar(routeMatch, id)
   })
 
   return container
