@@ -21,7 +21,7 @@ define('InitialPage', () => {
 
     // - Cabecera -
     h('header', { className: 'mx-auto flex max-w-3xl items-center gap-2 px-6 py-5' },
-      h('img', { src: '/favicon.svg', alt: '', className: 'h-6 w-6' }),
+      h('img', { src: `${import.meta.env.BASE_URL}favicon.svg`, alt: '', className: 'h-6 w-6' }),
       h('span', { className: 'flex-1 font-semibold text-slate-900' }, 'signals-starter-kit'),
       h('a', { href: REPO, className: 'text-sm hover:text-slate-900' }, 'GitHub')
     ),
