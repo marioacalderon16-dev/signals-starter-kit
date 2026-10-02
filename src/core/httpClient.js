@@ -132,7 +132,9 @@ export class HttpClient {
 
       return body
     } catch (error) {
-      log.error(`Error en ${method} ${endpoint}:`, error)
+      // Una cancelación con AbortSignal es intencionada (p.ej. al salir de la página): no es un error
+      if (error.name === 'AbortError') log.debug(`Cancelada: ${method} ${endpoint}`)
+      else log.error(`Error en ${method} ${endpoint}:`, error)
       throw error // Relanza el error para que el manejador lo capture
     }
   }

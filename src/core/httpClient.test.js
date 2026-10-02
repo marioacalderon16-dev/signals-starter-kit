@@ -73,6 +73,25 @@ describe('HttpClient', () => {
     await expect(api.get('/lento', {}, { timeout: 10 })).rejects.toThrow()
   })
 
+  it('una cancelación intencionada (AbortError) no se registra como error', async () => {
+    const controller = new AbortController()
+    fetchMock.mockImplementation((_, { signal }) => new Promise((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason))
+    }))
+    const promesa = api.get('/x', {}, { signal: controller.signal })
+    controller.abort()
+    await expect(promesa).rejects.toMatchObject({ name: 'AbortError' })
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it('un timeout sí se registra como error', async () => {
+    fetchMock.mockImplementation((_, { signal }) => new Promise((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason))
+    }))
+    await expect(api.get('/lento', {}, { timeout: 10 })).rejects.toMatchObject({ name: 'TimeoutError' })
+    expect(console.error).toHaveBeenCalled()
+  })
+
   it('acepta un AbortSignal externo', async () => {
     fetchMock.mockResolvedValue(respond('{}'))
     const controller = new AbortController()
