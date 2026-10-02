@@ -17,3 +17,5 @@ export {
   Effect, 
   Batch 
 } from './signal.js'
+
+export { resource } from './resource.js'
