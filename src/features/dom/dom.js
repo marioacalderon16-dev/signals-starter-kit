@@ -9,11 +9,27 @@ const isEmptyChild = v => v == null || typeof v === 'boolean'
 // Solo  onClick  (mayúscula tras "on") u  on:evento ; "one", "online"… son atributos
 const isEventKey = k => /^on[A-Z]/.test(k) || k.startsWith('on:')
 
+/* ----------  0.  gancho para devtools  ---------- */
+// devtools.onUpdate(el) se llama cada vez que un binding ACTUALIZA un nodo (no en el
+// primer pintado). Lo usa el panel de desarrollo; sin él, solo cuesta una comprobación.
+export const devtools = { onUpdate: null }
+
+// Effect de un binding que avisa a devtools en cada actualización.
+// `el` puede ser una función (el nodo afectado puede cambiar, p.ej. el padre de un texto).
+const enlazar = (el, aplicar) => {
+  let primera = true
+  effect(() => {
+    aplicar()
+    if (primera) primera = false
+    else if (devtools.onUpdate) devtools.onUpdate(typeof el === 'function' ? el() : el)
+  })
+}
+
 /* ----------  1.  bindProp  ---------- */
 // Nota: los bindings leen el signal SOLO dentro de su effect (que corre en el acto);
 // una lectura fuera la rastrearía el effect padre (p.ej. define reactivo) y re-renderizaría todo.
 export const bindProp = (el, prop, signal) => {
-  effect(() => { el[prop] = signal.get() })
+  enlazar(el, () => { el[prop] = signal.get() })
   return el
 }
 
@@ -23,7 +39,7 @@ export const bindAttr = (el, attr, signal) => {
     const v = signal.get()
     v == null ? el.removeAttribute(attr) : el.setAttribute(attr, v)
   }
-  effect(read)                 // inicial + reactivo
+  enlazar(el, read)            // inicial + reactivo
   return el
 }
 
@@ -32,7 +48,7 @@ export const bindAttr = (el, attr, signal) => {
 export const reactiveChild = signal => {
   const textNode = document.createTextNode('')
   let node = textNode
-  effect(() => {
+  enlazar(() => node.parentElement, () => {
     const v = signal.get()
     const next = v instanceof Node ? v : textNode
     if (next === textNode) textNode.nodeValue = isEmptyChild(v) ? '' : String(v)
@@ -47,7 +63,7 @@ export const reactiveChild = signal => {
 /* ----------  3.  reactiveText  ---------- */
 export const reactiveText = signal => {
   const node = document.createTextNode('')
-  effect(() => { node.nodeValue = signal.get() })
+  enlazar(() => node.parentElement, () => { node.nodeValue = signal.get() })
   return node
 }
 
@@ -155,7 +171,7 @@ export const h = (tag, attrs = {}, ...children) => {
         const apply = () => {
           el[propName] = base.concat(sig ? sig.get() : []).join(' ')
         }
-        effect(apply) 
+        enlazar(el, apply) 
         return
       }
       
@@ -168,7 +184,7 @@ export const h = (tag, attrs = {}, ...children) => {
           })
           el[propName] = list.join(' ')
         }
-        effect(apply) 
+        enlazar(el, apply) 
         return
       }
       
@@ -186,7 +202,7 @@ export const h = (tag, attrs = {}, ...children) => {
       if (typeof v === 'object' && !Array.isArray(v)) {
         Object.entries(v).forEach(([cssProp, val]) => {
           if (isSignal(val)) {
-            effect(() => { el.style[cssProp] = val.get() })
+            enlazar(el, () => { el.style[cssProp] = val.get() })
           } else {
             el.style[cssProp] = val
           }
@@ -201,7 +217,7 @@ export const h = (tag, attrs = {}, ...children) => {
     /* htmlFor (especial para <label>) */
     if (k === 'htmlFor') {
       if (isSignal(v)) {
-        effect(() => { el.setAttribute('for', v.get()) })
+        enlazar(el, () => { el.setAttribute('for', v.get()) })
       } else {
         el.setAttribute('for', v)
       }

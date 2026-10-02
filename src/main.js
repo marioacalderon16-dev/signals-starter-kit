@@ -28,3 +28,8 @@ if (appContainer) {
 } else {
   logger.error('❌ No se encontró el contenedor #app')
 }
+
+// 6. Devtools solo en desarrollo (no llegan al build). Desactívalas con VITE_DEVTOOLS=false
+if (import.meta.env.DEV && import.meta.env.VITE_DEVTOOLS !== 'false') {
+  import('@shared/devtools/devtools.js').then(({ iniciarDevtools }) => iniciarDevtools())
+}

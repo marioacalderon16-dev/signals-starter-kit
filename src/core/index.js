@@ -12,6 +12,7 @@ export {
   createRoot, 
   onCleanup, 
   getOwner, 
+  getStats, 
   Signal, 
   Computed, 
   Effect, 

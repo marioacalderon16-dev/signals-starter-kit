@@ -8,6 +8,9 @@ let signalIdCounter = 0
 
 // Dueño actual (Effect o root): adopta los effects y onCleanup creados mientras está activo
 let currentOwner = null
+
+// Effects vivos (creados y no destruidos): lo muestra el panel de devtools
+let efectosVivos = 0
 let effectIdCounter = 0
 
 class Signal {
@@ -116,6 +119,7 @@ class Effect {
     this.owned = []
     this.cleanups = []
     this.disposed = false
+    efectosVivos++
     if (currentOwner) currentOwner.owned.push(this)
     this.run()
   }
@@ -169,6 +173,7 @@ class Effect {
   cleanup() {
     if (this.disposed) return
     this.disposed = true
+    efectosVivos--
     disposeOwned(this)
     this._runCleanup()
     Effect.pending.delete(this)
@@ -257,6 +262,12 @@ export const createRoot = (fn) => {
     currentOwner = prevOwner
   }
 }
+
+/**
+ * Estadísticas del sistema reactivo (para devtools y depuración).
+ * @returns {{ effects: number }} effects vivos en este momento
+ */
+export const getStats = () => ({ effects: efectosVivos })
 
 /**
  * Devuelve el dueño actual (effect o root), o null si no hay ninguno.
