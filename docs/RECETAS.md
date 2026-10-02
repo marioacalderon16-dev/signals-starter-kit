@@ -1,16 +1,16 @@
 # Recetas: lo que puedes hacer con signals-starter-kit
 
-Siete ejemplos cortos e independientes, cada uno con un caso distinto. Todos usan las mismas tres piezas (`signal`, `computed` y `h()`) más alguna utilidad del kit. Cópialos tal cual: no necesitan dependencias extra.
+Siete ejemplos cortos e independientes, cada uno con un caso distinto. Todos usan las mismas tres piezas (`signal`, `computed` y `h()`) más alguna utilidad del kit, y todo se importa desde un único sitio: `import { … } from '@kit'`. Cópialos tal cual: no necesitan dependencias extra.
 
 | # | Receta | Lo que demuestra |
 |---|---|---|
 | 1 | [Contador](#1-contador) | `signal` + `computed`, lo mínimo |
-| 2 | [Mostrar / ocultar](#2-mostrar--ocultar) | Estado local y renderizado condicional |
-| 3 | [Formulario con validación en vivo](#3-formulario-con-validación-en-vivo) | Validar con `computed`, botón deshabilitado reactivo |
-| 4 | [Datos de una API](#4-datos-de-una-api) | `HttpClient`, estados de carga y error, cancelación |
+| 2 | [Mostrar / ocultar](#2-mostrar--ocultar) | Estado local y renderizado condicional con `Show` |
+| 3 | [Formulario con validación en vivo](#3-formulario-con-validación-en-vivo) | `bind:value`, validar con `computed`, botón deshabilitado reactivo |
+| 4 | [Datos de una API](#4-datos-de-una-api) | `resource` + `HttpClient`: carga, error, recarga y cancelación |
 | 5 | [Reloj](#5-reloj) | Temporizadores limpiados con `onCleanup` |
 | 6 | [Tema claro / oscuro](#6-tema-claro--oscuro) | `persist` + `effect` sobre el documento |
-| 7 | [Ruta con parámetros](#7-ruta-con-parámetros) | `generateUrl` y `params` decodificados |
+| 7 | [Ruta con parámetros](#7-ruta-con-parámetros) | `Link`, `generateUrl`, `title` y `params` decodificados |
 
 **Cómo usarlas:** guarda cada componente en `src/components/recetas/` (se registra solo) y muéstralo desde cualquier página con `c('NombreDelComponente')`. Al final tienes una [página para probarlas todas](#pruébalas-todas-en-una-página).
 
@@ -28,7 +28,7 @@ Ya viene en el kit: lo ves en la página de inicio, en "Demo en vivo". El estado
  * Ejemplo básico: un signal, un computed y tres acciones
  */
 
-import { signal, computed } from '@core/signal.js'
+import { signal, computed } from '@kit'
 
 // - Estado -
 export const contador = signal(0)
@@ -52,9 +52,7 @@ Y el componente pasa el signal y el `computed` directamente a `h()`:
  * Componente contador (ejemplo básico)
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { computed } from '@core/signal.js'
+import { define, h, computed } from '@kit'
 
 import { contador, doble, incrementar, decrementar, reiniciar } from '@features/contador/contador.state.js'
 
@@ -86,9 +84,7 @@ define('Contador', () =>
 
 ```js
 // src/components/recetas/MostrarOcultar.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed } from '@core/signal.js'
+import { define, h, signal, computed, Show } from '@kit'
 
 define('MostrarOcultar', () => {
   const abierto = signal(false) // estado local: cada instancia tiene el suyo
@@ -99,8 +95,7 @@ define('MostrarOcultar', () => {
       onClick: () => abierto.set(!abierto.get())
     }, computed(() => (abierto.get() ? 'Ocultar detalles' : 'Mostrar detalles'))),
 
-    // false → no se pinta nada; un nodo → se inserta
-    computed(() => abierto.get() && h('p', { className: 'text-slate-600' },
+    Show(abierto, () => h('p', { className: 'text-slate-600' },
       'Este párrafo solo existe en el DOM mientras está abierto.'
     ))
   )
@@ -108,15 +103,13 @@ define('MostrarOcultar', () => {
 ```
 
 - Un signal creado **dentro** del componente es estado local: cada `c('MostrarOcultar')` tiene el suyo.
-- Un `computed` puede devolver un **nodo** o `false`. Con `false` no se pinta nada, así que `cond && h(...)` sirve como `v-if` o `{cond && <p/>}`.
+- `Show(condición, vista)` pinta la vista solo mientras la condición es verdadera (como `v-if` o `{cond && <p/>}`). Al ocultarse, sus effects se liberan. Acepta una tercera función para la alternativa.
 
 ## 3. Formulario con validación en vivo
 
 ```js
 // src/components/recetas/FormularioEmail.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed } from '@core/signal.js'
+import { define, h, signal, computed, Show } from '@kit'
 
 define('FormularioEmail', () => {
   const email = signal('')
@@ -134,7 +127,7 @@ define('FormularioEmail', () => {
       type: 'email',
       placeholder: 'tu@email.com',
       className: 'w-full rounded-lg border-slate-300 text-slate-900',
-      onInput: (event) => email.set(event.target.value)
+      'bind:value': email // input ↔ signal
     }),
     h('p', { className: 'text-sm text-red-600' },
       computed(() => (email.get() && !valido.get() ? 'Ese email no parece válido.' : ''))
@@ -144,12 +137,12 @@ define('FormularioEmail', () => {
       disabled: computed(() => !valido.get()),
       className: 'rounded-lg bg-sky-600 px-4 py-2 font-medium text-white disabled:opacity-50'
     }, 'Suscribirme'),
-    computed(() => enviado.get() && h('p', { className: 'text-green-700' }, `¡Gracias, ${email.get()}!`))
+    Show(enviado, () => h('p', { className: 'text-green-700' }, computed(() => `¡Gracias, ${email.get()}!`)))
   )
 })
 ```
 
-- `onInput` actualiza el signal en cada tecla. `valido` se recalcula solo, y con él el mensaje de error y el `disabled` del botón.
+- `'bind:value': email` enlaza el input y el signal en los dos sentidos: al escribir se actualiza `email`, y `valido` se recalcula solo, y con él el mensaje de error y el `disabled` del botón.
 - Cualquier atributo acepta un `computed`: aquí `disabled`. Lo mismo vale para `className`, `title`, `value`…
 
 ## 4. Datos de una API
@@ -158,46 +151,36 @@ Usa [JSONPlaceholder](https://jsonplaceholder.typicode.com), una API pública de
 
 ```js
 // src/components/recetas/ListaUsuarios.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed, onCleanup } from '@core/signal.js'
-import { HttpClient } from '@core/httpClient.js'
+import { define, h, computed, Show, For, resource, HttpClient } from '@kit'
 
 const api = new HttpClient({ baseUrl: 'https://jsonplaceholder.typicode.com', timeout: 5000 })
 
 define('ListaUsuarios', () => {
-  const estado = signal({ cargando: true, error: null, usuarios: [] })
+  // resource: carga, error y cancelación (al desmontar o al recargar) incluidos
+  const usuarios = resource((_, { signal }) => api.get('/users', {}, { signal }))
 
-  // Si el componente se desmonta antes de que llegue la respuesta, se cancela la petición
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-
-  api.get('/users', {}, { signal: controller.signal })
-    .then(usuarios => estado.set({ cargando: false, error: null, usuarios }))
-    .catch(error => {
-      if (error.name !== 'AbortError') estado.set({ cargando: false, error, usuarios: [] })
-    })
-
-  return h('div', {}, computed(() => {
-    const { cargando, error, usuarios } = estado.get()
-    if (cargando) return h('p', { className: 'text-slate-500' }, 'Cargando…')
-    if (error) return h('p', { className: 'text-red-600' }, `Error: ${error.message}`)
-    return h('ul', { className: 'list-disc pl-5' }, usuarios.map(u => h('li', {}, u.name)))
-  }))
+  return h('div', { className: 'space-y-2' },
+    Show(usuarios.loading, () => h('p', { className: 'text-slate-500' }, 'Cargando…')),
+    Show(usuarios.error, () => h('p', { className: 'text-red-600' }, computed(() => `Error: ${usuarios.error.get()?.message}`))),
+    h('ul', { className: 'list-disc pl-5' },
+      For(() => usuarios.data.get() ?? [], u => u.id, u => h('li', {}, u.name))
+    ),
+    h('button', { className: 'text-sm text-sky-700 hover:underline', onClick: usuarios.refetch }, 'Recargar')
+  )
 })
 ```
 
-- Un único signal con `{ cargando, error, usuarios }` y un `computed` que devuelve el nodo adecuado para cada estado.
+- `resource(fetcher)` te da `loading`, `data` y `error` como signals, y `refetch()` para volver a pedir. No hay que escribir `AbortController` ni `.then/.catch`.
+- La petición se **cancela sola** si sales de la página antes de que llegue la respuesta, o si pulsas "Recargar" mientras carga.
+- Al recargar (o si falla), `data` conserva los datos anteriores: la lista no parpadea.
 - `HttpClient` aplica el `timeout` y, si la respuesta no es 2xx, lanza un error con `status` y el cuerpo en `data`.
-- `onCleanup` + `AbortController`: si sales de la página antes de que llegue la respuesta, la petición se cancela.
+- Si la petición depende de otro signal (un id, un texto de búsqueda), pásalo como fuente: `resource(() => id.get(), (id, { signal }) => …)`. Se vuelve a pedir solo cuando cambia.
 
 ## 5. Reloj
 
 ```js
 // src/components/recetas/Reloj.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed, onCleanup } from '@core/signal.js'
+import { define, h, signal, computed, onCleanup } from '@kit'
 
 define('Reloj', () => {
   const ahora = signal(new Date())
@@ -226,8 +209,7 @@ El estado, con persistencia:
 
 ```js
 // src/features/tema/tema.state.js
-import { signal, effect } from '@core/signal.js'
-import { persist } from '@shared/utils/persist.js'
+import { signal, effect, persist } from '@kit'
 
 export const tema = signal('claro')
 persist('tema', tema) // recuerda la elección entre visitas
@@ -244,9 +226,7 @@ Y el botón:
 
 ```js
 // src/components/recetas/BotonTema.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { computed } from '@core/signal.js'
+import { define, h, computed } from '@kit'
 import { tema, alternarTema } from '@features/tema/tema.state.js'
 
 define('BotonTema', () =>
@@ -266,22 +246,21 @@ define('BotonTema', () =>
 Registra la ruta en `src/features/router/routes.config.js`:
 
 ```js
-{ path: '/saludo/:nombre', component: 'SaludoPage', name: 'saludo' }
+{ path: '/saludo/:nombre', component: 'SaludoPage', name: 'saludo', title: ({ params }) => `Hola, ${params.nombre}` }
 ```
 
 Y crea la página:
 
 ```js
 // src/components/pages/SaludoPage.js
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, Link } from '@kit'
 import { generateUrl } from '@features/router/routes.config.js'
 
 define('SaludoPage', ({ params }) =>
   h('main', { className: 'mx-auto max-w-lg space-y-4 p-6' },
     h('h1', { className: 'text-2xl font-bold' }, `¡Hola, ${params.nombre}!`), // ya decodificado
-    h('a', {
-      href: generateUrl('saludo', { nombre: 'Ana López' }), // → /saludo/Ana%20L%C3%B3pez
+    Link({
+      to: generateUrl('saludo', { nombre: 'Ana López' }), // → /saludo/Ana%20L%C3%B3pez
       className: 'text-sky-700 hover:underline'
     }, 'Saludar a Ana López')
   )
@@ -290,14 +269,14 @@ define('SaludoPage', ({ params }) =>
 
 - `generateUrl` construye la URL por el **nombre** de la ruta y codifica los valores (`Ana López` → `Ana%20L%C3%B3pez`).
 - El router **decodifica** los params antes de pasarlos: la página recibe `Ana López` tal cual.
-- Visitar `/saludo/Mundo` muestra "¡Hola, Mundo!".
+- `Link` crea el enlace (navega sin recargar y añade la base de despliegue si la hay).
+- `title` pone el título de la pestaña: visitar `/saludo/Mundo` muestra "¡Hola, Mundo!" y la pestaña dice "Hola, Mundo · …".
 
 ## Pruébalas todas en una página
 
 ```js
 // src/components/pages/RecetasPage.js
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, c, Link } from '@kit'
 
 const tarjeta = (titulo, contenido) =>
   h('section', { className: 'rounded-xl bg-white p-5 shadow ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100' },
@@ -311,7 +290,7 @@ define('RecetasPage', () =>
     tarjeta('API', c('ListaUsuarios')),
     tarjeta('Reloj', c('Reloj')),
     tarjeta('Tema', c('BotonTema')),
-    tarjeta('Ruta con params', h('a', { href: '/saludo/Mundo', className: 'text-sky-700' }, '/saludo/Mundo'))
+    tarjeta('Ruta con params', Link({ to: '/saludo/Mundo', className: 'text-sky-700' }, '/saludo/Mundo'))
   )
 )
 ```
@@ -319,7 +298,7 @@ define('RecetasPage', () =>
 Añade la ruta junto a la de la receta 7:
 
 ```js
-{ path: '/recetas', component: 'RecetasPage', name: 'recetas' }
+{ path: '/recetas', component: 'RecetasPage', name: 'recetas', title: 'Recetas' }
 ```
 
 Abre http://localhost:4321/recetas.

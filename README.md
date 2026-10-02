@@ -86,6 +86,7 @@ Definidas en `.env` (no se versiona; usa `.env.example` como plantilla):
 ```
 src/
 ├── main.js                  # Punto de entrada: monta el componente App en #app
+├── kit.js                   # API pública del kit: import { … } from '@kit'
 ├── style.css                # Tailwind
 ├── config/app.js            # Configuración leída de .env
 ├── core/
@@ -110,14 +111,24 @@ src/
 scripts/new.js               # Generador de código: npm run new
 ```
 
-Alias de importación: `@` (src), `@core`, `@components`, `@features`, `@shared`.
+Alias de importación: `@kit` (la API pública), `@` (src), `@core`, `@components`, `@features`, `@shared`.
 
 ## Conceptos
+
+Todo lo público se importa desde un único sitio:
+
+```js
+import { signal, computed, effect, resource, h, For, Show, define, c, Link, navigate, currentQuery } from '@kit'
+```
+
+`@kit` (`src/kit.js`) reexporta la reactividad, el DOM, los componentes, el router, `HttpClient` y `persist`. Los módulos internos (`@core/…`, `@features/…`) siguen disponibles para usos avanzados. `generateUrl` se importa de `@features/router/routes.config.js`.
+
+> **Ciclo de importación con los guards.** `routes.config.js` importa los guards de tu app; si un guard (o algo que importe, como el estado de la sesión) importa `'@kit'`, se forma un ciclo: `'@kit'` incluye el router, que importa `routes.config.js`. El kit ordena sus exportaciones para tolerarlo (todo lo que no es router se carga antes), pero lo más robusto es que **lo que importa `routes.config.js` importe del núcleo** (`@core/signal.js`, `@shared/utils/persist.js`…) y que no llame a `navigate` ni a `generateUrl` al cargarse, solo dentro de funciones.
 
 ### Signals
 
 ```js
-import { signal, computed, effect } from '@core/signal.js'
+import { signal, computed, effect } from '@kit'
 
 const contador = signal(0)
 const doble = computed(() => contador.get() * 2)
@@ -140,7 +151,7 @@ dispose()       // detiene el effect
 #### Datos asíncronos: `resource`
 
 ```js
-import { resource } from '@core/index.js'
+import { resource } from '@kit'
 
 const usuario = resource(
   () => id.get(),                                            // fuente: se rastrea
@@ -162,7 +173,7 @@ usuario.mutate(v)     // cambia data en local (p.ej. actualización optimista)
 ### Crear DOM con `h()`
 
 ```js
-import { h } from '@features/dom/dom.js'
+import { h } from '@kit'
 
 h('button', {
   className: 'rounded bg-sky-600 px-4 py-2 text-white',
@@ -181,7 +192,7 @@ h('button', {
 Para listas que cambian, `For` reutiliza los nodos de los elementos que no cambian en lugar de repintar la lista entera:
 
 ```js
-import { h, For } from '@features/dom/dom.js'
+import { h, For } from '@kit'
 
 h('ul', {},
   For(tareas, t => t.id, t => h('li', {}, t.texto))
@@ -195,7 +206,7 @@ h('ul', {},
 #### Mostrar u ocultar: `Show`
 
 ```js
-import { h, Show } from '@features/dom/dom.js'
+import { h, Show } from '@kit'
 
 Show(usuario.loading, () => h('p', {}, 'Cargando…'))
 Show(() => carrito.get().length > 0, () => h('ul', {}, '…'), () => h('p', {}, 'El carrito está vacío'))
@@ -221,7 +232,7 @@ h('select', { 'bind:value': pais }, h('option', { value: 'es' }, 'España'))
 ### Componentes
 
 ```js
-import { define, c } from '@components/Component.js'
+import { define, c } from '@kit'
 
 define('Saludo', ({ nombre }) => h('p', {}, `Hola, ${nombre}`))
 
@@ -252,7 +263,7 @@ define('ProductPage', ({ params }) => h('h1', {}, `Producto ${params.id}`))
 Para navegar:
 
 ```js
-import { navigate, currentQuery } from '@features/router/router.state.js'
+import { navigate, currentQuery } from '@kit'
 
 navigate('/products/7?color=rojo')
 currentQuery.get() // { color: 'rojo' } — reactivo
@@ -265,7 +276,7 @@ currentQuery.get() // { color: 'rojo' } — reactivo
 #### Enlaces: `Link`
 
 ```js
-import { Link } from '@features/router/Link.js'
+import { Link } from '@kit'
 
 Link({ to: '/admin/productos', activeClass: 'font-bold', prefetch: true }, 'Productos')
 h(Link, { to: '/acerca', className: 'text-sm' }, 'Acerca')
@@ -283,17 +294,17 @@ h(Link, { to: '/acerca', className: 'text-sm' }, 'Acerca')
 ```
 
 ```js
-define('AdminLayout', ({ contenido, title }) =>
+define('AdminLayout', ({ content, title }) =>
   h('div', {},
     h('header', {}, /* menú, usuario… */),
     h('h1', {}, title),   // title es un signal: cambia con cada página
-    contenido             // aquí se monta la página
+    content               // aquí se monta la página
   )
 )
 ```
 
 - `title` (texto o función) pone `Título · nombre de la app` en la pestaña. Las rutas sin `title` muestran el nombre de la app.
-- `layout` envuelve la página. Si dos rutas seguidas comparten layout, **no se vuelve a montar**: solo cambia la página, y la cabecera conserva su estado (un buscador, un menú abierto…).
+- `layout` envuelve la página: el componente recibe `content` (el hueco donde va la página; `contenido` sigue funcionando como alias) y `title` (un signal). Si dos rutas seguidas comparten layout, **no se vuelve a montar**: solo cambia la página, y la cabecera conserva su estado (un buscador, un menú abierto…).
 
 #### Transiciones entre páginas
 
@@ -316,6 +327,7 @@ export const routes = [
 - `redirect` (texto o función) y `beforeEnter` (devuelve una ruta para redirigir; cualquier otro valor deja pasar) reciben `{ path, params, query }`.
 - Las redirecciones usan `replace`: no dejan entradas extra en el historial. Los bucles se cortan a las 10 redirecciones.
 - El guard se evalúa al navegar, no cuando cambia un signal que lee: tras cerrar sesión, llama a `navigate('/login')`.
+- El estado que usa el guard (aquí `sesion`) conviene que importe del núcleo y no de `'@kit'`: ver [Ciclo de importación con los guards](#conceptos).
 
 #### Carga diferida de páginas
 
@@ -331,7 +343,7 @@ export const routes = [
 Si la app vive en una subruta (por ejemplo GitHub Pages: `https://usuario.github.io/mi-app/`), configura `base: '/mi-app/'` en `vite.config.js`. El router la tiene en cuenta: las rutas de la app siguen siendo `/`, `/tareas`…
 
 - `navigate('/tareas')` añade la base sola.
-- Para los `href`, usa `url('/tareas')` (de `@features/router/router.state.js`) o `generateUrl(...)`, que ya incluyen la base. Así los enlaces también funcionan al abrirlos en una pestaña nueva.
+- Para los `href`, usa `Link`, `url('/tareas')` (los dos en `'@kit'`) o `generateUrl(...)`, que ya incluyen la base. Así los enlaces también funcionan al abrirlos en una pestaña nueva.
 - Para recursos de `public/` desde JS, usa `` `${import.meta.env.BASE_URL}favicon.svg` ``.
 
 ## Generador de código

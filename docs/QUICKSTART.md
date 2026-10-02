@@ -104,9 +104,7 @@ Crea `src/features/tareas/tareas.state.js`:
  * Estado y acciones de la lista de tareas
  */
 
-import { signal, computed } from '@core/signal.js'
-import { persist } from '@shared/utils/persist.js'
-import { currentQuery } from '@features/router/router.state.js'
+import { signal, computed, persist, currentQuery } from '@kit'
 
 // - Estado -
 export const tareas = signal([]) // [{ id, texto, hecha }]
@@ -140,11 +138,12 @@ export const eliminar = (id) => {
 export const buscar = (id) => tareas.get().find(t => t.id === id)
 ```
 
-Fíjate en tres cosas:
+Fíjate en cuatro cosas:
 
-1. **`persist('tareas', tareas)`** guarda el signal en `localStorage` en cada cambio y lo recupera al cargar. Una línea y tus tareas sobreviven a un recargo.
-2. **`filtro` sale de la URL** con `currentQuery`, que el router mantiene actualizado. El filtro no es un estado aparte: es la propia URL, así que se puede compartir y funciona con el botón atrás.
-3. **Las acciones crean siempre un array nuevo.** `set()` ignora el valor si es el mismo objeto (`Object.is`), así que `tareas.get().push(...)` no avisaría a nadie. Usa `[...lista]`, `map` o `filter`.
+1. **Todo se importa de `'@kit'`**, el punto de entrada único del kit: signals, DOM, componentes, router y utilidades.
+2. **`persist('tareas', tareas)`** guarda el signal en `localStorage` en cada cambio y lo recupera al cargar. Una línea y tus tareas sobreviven a un recargo.
+3. **`filtro` sale de la URL** con `currentQuery`, que el router mantiene actualizado. El filtro no es un estado aparte: es la propia URL, así que se puede compartir y funciona con el botón atrás.
+4. **Las acciones crean siempre un array nuevo.** `set()` ignora el valor si es el mismo objeto (`Object.is`), así que `tareas.get().push(...)` no avisaría a nadie. Usa `[...lista]`, `map` o `filter`.
 
 ## 2. Un componente: `TareaItem`
 
@@ -159,8 +158,7 @@ Crea `src/components/tareas/TareaItem.js`:
  * Una fila de la lista
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, Link } from '@kit'
 import { alternar, eliminar } from '@features/tareas/tareas.state.js'
 
 define('TareaItem', ({ tarea }) =>
@@ -171,9 +169,9 @@ define('TareaItem', ({ tarea }) =>
       className: 'rounded text-sky-600',
       onChange: () => alternar(tarea.id)
     }),
-    h('a', {
-      href: `/tareas/${tarea.id}`,
-      className: { 'flex-1 hover:underline': true, 'line-through text-slate-400': tarea.hecha }
+    Link({
+      to: `/tareas/${tarea.id}`,
+      className: tarea.hecha ? 'flex-1 line-through text-slate-400 hover:underline' : 'flex-1 hover:underline'
     }, tarea.texto),
     h('button', {
       className: 'text-sm text-red-600 hover:text-red-800',
@@ -184,12 +182,12 @@ define('TareaItem', ({ tarea }) =>
 ```
 
 - **Eventos:** `onChange`, `onClick`… (mayúscula tras `on`). Para nombres arbitrarios existe `on:mi-evento`.
-- **`className` como objeto:** cada clave se aplica si su valor es verdadero. Aquí tachamos la tarea si está hecha.
-- **Enlaces normales:** el `<a href="/tareas/...">` navega **sin recargar** la página. El router intercepta los clics en enlaces internos automáticamente.
+- **`checked: tarea.hecha`:** los atributos aceptan valores normales o signals. Aquí, la clase del enlace también depende de si la tarea está hecha.
+- **`Link`:** crea un enlace que navega **sin recargar** la página (también funcionaría un `<a href>` normal: el router intercepta los enlaces internos). `Link` además añade la base de despliegue y puede marcar el enlace activo.
 
 No hace falta importar este archivo en ningún sitio: todo `.js` dentro de una subcarpeta de `src/components/` se registra solo.
 
-## 3. Una lista reactiva con `define(..., true)`
+## 3. La lista: `For` y `Show`
 
 Crea `src/components/tareas/ListaTareas.js`:
 
@@ -197,27 +195,27 @@ Crea `src/components/tareas/ListaTareas.js`:
 /**
  * src/components/tareas/ListaTareas.js
  *
- * Lista reactiva: se vuelve a renderizar cuando cambia `visibles`
+ * La lista: For pinta una fila por tarea y Show el aviso de lista vacía
  */
 
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, c, For, Show } from '@kit'
 import { visibles } from '@features/tareas/tareas.state.js'
 
-define('ListaTareas', () => {
-  const lista = visibles.get() // leído en el cuerpo → re-render al cambiar
-
-  if (lista.length === 0) {
-    return h('p', { className: 'py-6 text-center text-slate-400' }, 'No hay tareas aquí.')
-  }
-
-  return h('ul', { className: 'divide-y divide-slate-200' },
-    lista.map(tarea => c('TareaItem', { tarea }))
+define('ListaTareas', () =>
+  h('div', {},
+    Show(() => visibles.get().length === 0, () =>
+      h('p', { className: 'py-6 text-center text-slate-400' }, 'No hay tareas aquí.')
+    ),
+    h('ul', { className: 'divide-y divide-slate-200' },
+      For(visibles, tarea => tarea.id, tarea => c('TareaItem', { tarea }))
+    )
   )
-}, true) // ← true: componente reactivo
+)
 ```
 
-El `true` final convierte el componente en **reactivo**: se vuelve a renderizar cuando cambia un signal leído directamente en su cuerpo (aquí, `visibles`). Por eso puedes usar un `if` normal para el estado vacío. Al re-renderizar, los effects de la versión anterior se liberan solos.
+- **`For(lista, clave, render)`** pinta una fila por tarea y **reutiliza los nodos**: al marcar una tarea, `alternar` crea un objeto nuevo solo para esa tarea, así que solo se vuelve a pintar su fila. Las demás no se tocan, y al reordenar o borrar se mueven en bloque.
+- **`Show(condición, vista)`** muestra el aviso solo cuando la lista está vacía.
+- El componente **no se vuelve a ejecutar** nunca: `For` y `Show` se actualizan solos. (Si alguna vez necesitas re-renderizar un bloque entero cuando cambia un signal, existe `define('Nombre', fn, true)`.)
 
 ## 4. El formulario
 
@@ -230,28 +228,28 @@ Crea `src/components/tareas/NuevaTarea.js`:
  * Formulario para añadir tareas
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, signal } from '@kit'
 import { agregar } from '@features/tareas/tareas.state.js'
 
 define('NuevaTarea', () => {
-  const input = h('input', {
-    type: 'text',
-    placeholder: '¿Qué hay que hacer?',
-    className: 'flex-1 rounded-lg border-slate-300'
-  })
+  const texto = signal('') // enlazado al input con bind:value
 
   return h('form', {
     className: 'flex gap-2',
     onSubmit: (event) => {
       event.preventDefault()
-      const texto = input.value.trim()
-      if (!texto) return
-      agregar(texto)
-      input.value = ''
+      const valor = texto.get().trim()
+      if (!valor) return
+      agregar(valor)
+      texto.set('') // vacía también el input
     }
   },
-    input,
+    h('input', {
+      type: 'text',
+      placeholder: '¿Qué hay que hacer?',
+      className: 'flex-1 rounded-lg border-slate-300',
+      'bind:value': texto
+    }),
     h('button', {
       type: 'submit',
       className: 'rounded-lg bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-700'
@@ -260,7 +258,7 @@ define('NuevaTarea', () => {
 })
 ```
 
-Como `h()` devuelve elementos reales del DOM, puedes guardar el `input` en una variable y leer `input.value` cuando lo necesites. No hay refs ni magia. El plugin `@tailwindcss/forms`, ya incluido, da estilo a los inputs.
+**`'bind:value': texto`** enlaza el input y el signal en los dos sentidos: al escribir se actualiza `texto`, y `texto.set('')` vacía el input tras añadir la tarea. No hay que leer `input.value` a mano. El plugin `@tailwindcss/forms`, ya incluido, da estilo a los inputs.
 
 ## 5. Filtros en la URL
 
@@ -273,9 +271,7 @@ Crea `src/components/tareas/FiltrosTareas.js`:
  * Filtros que viven en la URL (?filtro=pendientes)
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { computed } from '@core/signal.js'
+import { define, h, computed } from '@kit'
 import { filtro, pendientes } from '@features/tareas/tareas.state.js'
 
 const opciones = [
@@ -319,8 +315,7 @@ Crea `src/components/pages/TareasPage.js`:
  * Página /tareas
  */
 
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h, c } from '@kit'
 
 define('TareasPage', () =>
   h('main', { className: 'mx-auto max-w-lg space-y-4 p-6' },
@@ -341,10 +336,12 @@ export const routes = [
     component: 'InitialPage',
     name: 'initial'
   },
-  { path: '/tareas', component: 'TareasPage', name: 'tareas' },
-  { path: '/tareas/:id', component: 'TareaPage', name: 'tarea' }
+  { path: '/tareas', component: 'TareasPage', name: 'tareas', title: 'Mis tareas' },
+  { path: '/tareas/:id', component: 'TareaPage', name: 'tarea', title: 'Detalle de la tarea' }
 ]
 ```
+
+`title` pone el título de la pestaña ("Mis tareas · signals-starter-kit") al entrar en cada ruta.
 
 Abre http://localhost:4321/tareas y añade unas tareas.
 
@@ -359,21 +356,19 @@ Crea `src/components/pages/TareaPage.js`:
  * Página /tareas/:id
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { onCleanup } from '@core/signal.js'
+import { define, h, Link, navigate, onCleanup } from '@kit'
 import { buscar } from '@features/tareas/tareas.state.js'
 
 define('TareaPage', ({ params }) => {
   const tarea = buscar(params.id)
 
-  // Cambia el título de la pestaña y lo restaura al salir de la página
-  const tituloAnterior = document.title
-  document.title = tarea ? tarea.texto : 'Tarea no encontrada'
-  onCleanup(() => { document.title = tituloAnterior })
+  // Atajo de teclado: Escape vuelve al listado. El listener se quita al salir de la página
+  const alPulsar = (event) => { if (event.key === 'Escape') navigate('/tareas') }
+  window.addEventListener('keydown', alPulsar)
+  onCleanup(() => window.removeEventListener('keydown', alPulsar))
 
   return h('main', { className: 'mx-auto max-w-lg space-y-4 p-6' },
-    h('a', { href: '/tareas', className: 'text-sm text-sky-700 hover:underline' }, '← Volver'),
+    Link({ to: '/tareas', className: 'text-sm text-sky-700 hover:underline' }, '← Volver (o pulsa Escape)'),
     tarea
       ? h('div', { className: 'rounded-xl bg-white p-6 shadow' },
           h('h1', { className: 'text-xl font-bold' }, tarea.texto),
@@ -385,8 +380,8 @@ define('TareaPage', ({ params }) => {
 ```
 
 - El router pasa los parámetros de la ruta en `props.params`, **ya decodificados**: `params.id` es el `:id` de `/tareas/:id`.
-- **`onCleanup`** registra una limpieza que se ejecuta cuando la página se desmonta. Aquí restaura el título de la pestaña al volver. Úsalo también para quitar listeners de `window`, parar un `setInterval`, etc.
-- El enlace `← Volver` es otro `<a>` normal.
+- **`onCleanup`** registra una limpieza que se ejecuta cuando la página se desmonta. Aquí quita el listener de teclado al salir: sin él, Escape seguiría llevando al listado desde cualquier página. Úsalo para todo lo que la página "enciende" fuera de su DOM: listeners de `window`, `setInterval`, sockets…
+- `navigate('/tareas')` navega desde código; `Link` hace lo mismo desde un enlace.
 
 ## Pruébalo
 
@@ -395,7 +390,8 @@ En http://localhost:4321/tareas comprueba que:
 - [ ] Al añadir una tarea, aparece en la lista y el input se vacía.
 - [ ] Al marcar una tarea, se tacha y el contador de pendientes baja.
 - [ ] Los filtros cambian la URL (`?filtro=hechas`) sin recargar la página, y el botón atrás deshace el filtro.
-- [ ] Al pulsar una tarea, el título de la pestaña cambia; al volver, se restaura.
+- [ ] Al pulsar una tarea, la pestaña dice "Detalle de la tarea"; **Escape** (o "← Volver") vuelve al listado y la pestaña dice "Mis tareas".
+- [ ] De vuelta en la portada (`/`), Escape ya no hace nada: el listener se quitó al salir del detalle.
 - [ ] `/tareas/no-existe` muestra "Esa tarea no existe."
 - [ ] Al recargar la página, las tareas siguen ahí.
 
@@ -406,7 +402,7 @@ Como el estado vive en su propio módulo, se prueba sin tocar el DOM. Crea `src/
 ```js
 import { describe, it, expect, beforeEach } from 'vitest'
 import { tareas, pendientes, visibles, agregar, alternar, eliminar } from './tareas.state.js'
-import { navigate } from '@features/router/router.state.js'
+import { navigate } from '@kit'
 
 describe('tareas', () => {
   beforeEach(() => {
@@ -467,6 +463,11 @@ npm run preview
 | Varios cambios, una notificación | `Batch.run(() => { a.set(1); b.set(2) })` |
 | Limpiar al desmontar | `onCleanup(() => ...)` |
 | Texto/clase/atributo reactivo | Pasa el signal o un `computed` a `h()` |
+| Una lista que cambia | `For(lista, item => item.id, item => h(…))` |
+| Mostrar u ocultar algo | `Show(condición, () => h(…))` |
+| Enlazar un input con un signal | `h('input', { 'bind:value': s })` |
+| Pedir datos a una API | `resource((_, { signal }) => api.get(…, {}, { signal }))` |
+| Un enlace interno | `Link({ to: '/ruta' }, 'texto')` |
 | Re-renderizar un bloque entero | `define('Nombre', fn, true)` |
 | Navegar desde código | `navigate('/ruta')` |
 | Leer la query | `currentQuery.get()` |
@@ -475,7 +476,7 @@ npm run preview
 **Trampas:**
 
 - **Mutar en lugar de reemplazar:** `lista.get().push(x)` no notifica. Haz `lista.set([...lista.get(), x])`.
-- **Leer `.get()` en el cuerpo de un componente no reactivo:** el valor queda congelado. Pasa el signal (o un `computed`) a `h()`, o marca el componente con `true`.
+- **Leer `.get()` en el cuerpo de un componente:** el valor queda congelado (el componente se ejecuta una sola vez). Pasa el signal o un `computed` a `h()`, usa `For`/`Show`, o marca el componente con `true`.
 - **`innerHTML`:** se ignora con un aviso en consola. Es intencionado.
 - **Hijos junto a `textContent`:** se ignoran (con aviso). Usa uno u otro.
 
@@ -483,6 +484,6 @@ npm run preview
 
 - Da el salto profesional con el [tutorial del panel de administración](TUTORIAL-PANEL.md): login, rutas protegidas, CRUD, tests, CI y despliegue.
 - Explora las [recetas](RECETAS.md): siete ejemplos cortos (formulario con validación, datos de una API, reloj, tema oscuro, rutas con params…).
-- Conecta una API real con `HttpClient` (`src/core/httpClient.js`): soporta timeout, cancelación con `AbortSignal` y errores con `status`.
+- Conecta una API real con `resource` y `HttpClient` (los dos en `'@kit'`): carga, error, cancelación y timeout incluidos. La [receta 4](RECETAS.md#4-datos-de-una-api) lo muestra.
 - Lee los tests de `src/core/` y `src/features/` como documentación ejecutable de cada pieza.
 - Repasa el [README](../README.md) para la referencia de todas las APIs.

@@ -72,12 +72,14 @@ src/
 │   ├── auth.guards.js                  # requiereSesion, soloInvitados
 │   └── auth.actions.js                 # iniciarSesion, cerrarSesion
 └── components/
-    ├── admin/AdminLayout.js            # Cabecera común del panel
+    ├── admin/AdminLayout.js            # Layout del panel (se declara en las rutas)
     └── pages/
         ├── LoginPage.js
         ├── ProductosPage.lazy.js       # Se descarga solo al entrar en el panel
         └── ProductoEditarPage.lazy.js
 ```
+
+Casi todo se importa desde un único sitio, `'@kit'`: signals, `h`, `For`, `Show`, `Link`, `resource`, `navigate`… La excepción, y su porqué, aparece en el capítulo 3.
 
 ### Los tres flujos principales
 
@@ -91,13 +93,13 @@ src/
 **Listado**
 
 1. La URL es el estado: `?q=phone&pagina=2`.
-2. Un `effect` lee `currentQuery`, llama a `productos.service.listar()` y guarda el resultado en un signal.
+2. Un `resource` lee `currentQuery`, llama a `productos.service.listar()` y expone `data`, `loading` y `error`.
 3. `For` pinta las filas.
-4. Si la URL cambia antes de que llegue la respuesta, la petición anterior se cancela.
+4. Si la URL cambia antes de que llegue la respuesta, `resource` cancela la petición anterior.
 
 **Edición**
 
-1. La página carga el producto y crea un signal por campo.
+1. La página carga el producto con `resource` y crea un signal por campo, enlazado al input con `bind:value`.
 2. Un `computed` valida mientras se escribe.
 3. Al guardar se llama a `actualizar()` y se vuelve al listado con un aviso.
 
@@ -118,6 +120,8 @@ Antes de hablar con ninguna API, montamos la estructura completa con **páginas 
  * Sesión del usuario: un signal persistido en localStorage
  */
 
+// Este módulo lo importan los guards, y los guards los importa routes.config.js:
+// por eso importa del núcleo y no de '@kit' (que incluye el router → evitaría un ciclo)
 import { signal, computed } from '@core/signal.js'
 import { persist } from '@shared/utils/persist.js'
 
@@ -138,6 +142,8 @@ export const borrarSesion = () => sesion.set(null)
 ```
 
 `sesionValida()` es una función, no un `computed`: depende de la hora (`Date.now()`), que no es reactiva. Se comprueba al navegar, que es justo cuando la necesitamos.
+
+> **Por qué este archivo no importa de `'@kit'`.** `routes.config.js` importa los guards, y los guards importan la sesión. `'@kit'` incluye el router, que a su vez importa `routes.config.js`: si la sesión importara `'@kit'`, se formaría un ciclo de importación. El kit ordena sus exportaciones para tolerarlo, pero un ciclo así es frágil (según el orden de carga, en los tests, por ejemplo, `persist` podría no existir todavía). Regla: **lo que importa `routes.config.js` (guards y lo que estos usen) importa del núcleo** (`@core/…`, `@shared/…`) y no llama a `navigate` ni a `generateUrl` al cargarse, solo dentro de funciones. El resto de la app usa `'@kit'`.
 
 ### Los guards
 
@@ -173,8 +179,8 @@ Los guards viven en su propio archivo y **solo importan la sesión**. Si importa
  * Acciones de sesión: combinan estado y navegación
  */
 
+import { navigate } from '@kit'
 import { borrarSesion } from './sesion.state.js'
-import { navigate } from '@features/router/router.state.js'
 
 /**
  * Solo permite volver a rutas internas ('/admin/...'): evita redirecciones abiertas
@@ -204,12 +210,14 @@ export const routes = [
     component: 'InitialPage',
     name: 'initial'
   },
-  { path: '/login', component: 'LoginPage', name: 'login', beforeEnter: soloInvitados },
+  { path: '/login', component: 'LoginPage', name: 'login', title: 'Iniciar sesión', beforeEnter: soloInvitados },
   { path: '/admin', redirect: '/admin/productos' },
   {
     path: '/admin/productos',
     component: 'ProductosPage',
     name: 'productos',
+    title: 'Productos',
+    layout: 'AdminLayout',
     beforeEnter: requiereSesion,
     load: () => import('@components/pages/ProductosPage.lazy.js')
   },
@@ -217,6 +225,8 @@ export const routes = [
     path: '/admin/productos/:id',
     component: 'ProductoEditarPage',
     name: 'producto',
+    title: ({ params }) => `Editar producto #${params.id}`,
+    layout: 'AdminLayout',
     beforeEnter: requiereSesion,
     load: () => import('@components/pages/ProductoEditarPage.lazy.js')
   }
@@ -225,6 +235,8 @@ export const routes = [
 
 - `beforeEnter` decide si se puede entrar. Si devuelve una ruta, redirige allí.
 - `redirect` convierte `/admin` en `/admin/productos`.
+- `title` pone el título de la pestaña (`Productos · …`); puede ser una función de los `params`.
+- `layout: 'AdminLayout'` envuelve las páginas del panel en su marco común. Las páginas solo devuelven su contenido.
 - `load` descarga la página la primera vez que se visita. Por eso esos archivos se llaman `*.lazy.js`: el autoregistro de componentes los excluye para que no se incluyan en el bundle principal.
 
 ### El layout del panel
@@ -233,34 +245,34 @@ export const routes = [
 /**
  * src/components/admin/AdminLayout.js
  *
- * Marco común de las páginas del panel: cabecera con usuario y cierre de sesión
+ * Layout del panel: se declara en las rutas (layout: 'AdminLayout') y el router
+ * lo conserva al navegar entre páginas del panel. Recibe { content, title }.
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { computed } from '@core/signal.js'
-import { url } from '@features/router/router.state.js'
+import { define, h, computed, Link } from '@kit'
 import { usuario } from '@features/auth/sesion.state.js'
 import { cerrarSesion } from '@features/auth/auth.actions.js'
 
-define('AdminLayout', ({ titulo, contenido }) =>
+define('AdminLayout', ({ content, title }) =>
   h('div', { className: 'min-h-screen bg-slate-50' },
     h('header', { className: 'border-b border-slate-200 bg-white' },
       h('div', { className: 'mx-auto flex max-w-5xl items-center gap-4 px-6 py-3' },
-        h('a', { href: url('/admin/productos'), className: 'font-semibold text-slate-900' }, 'Panel'),
+        Link({ to: '/admin/productos', className: 'font-semibold text-slate-900' }, 'Panel'),
         h('span', { className: 'flex-1 text-right text-sm text-slate-500' }, computed(() => usuario.get()?.nombre ?? '')),
         h('button', { className: 'text-sm font-medium text-sky-700 hover:underline', onClick: cerrarSesion }, 'Cerrar sesión')
       )
     ),
     h('main', { className: 'mx-auto max-w-5xl space-y-4 px-6 py-8' },
-      h('h1', { className: 'text-2xl font-bold text-slate-900' }, titulo),
-      contenido
+      h('h1', { className: 'text-2xl font-bold text-slate-900' }, title), // title: signal con el título de la ruta
+      content                                                              // aquí se monta cada página
     )
   )
 )
 ```
 
-Fíjate en `url('/admin/productos')` en el `href`: añade la base de despliegue. Ahora no hace nada, pero en el capítulo 11 la app vivirá en `/tu-repo/` y los enlaces seguirán funcionando, también al abrirlos en una pestaña nueva.
+- El router le pasa **`content`**, el hueco donde monta cada página, y **`title`**, un signal con el título de la ruta actual.
+- Como las dos rutas del panel comparten `layout`, **el layout no se vuelve a montar al navegar entre ellas**: solo cambia el contenido. La cabecera conserva su estado, y mientras se descarga una página diferida, el "Cargando…" aparece dentro del layout.
+- `Link` añade la base de despliegue al `href`. Ahora no hace nada, pero en el capítulo 11 la app vivirá en `/tu-repo/` y los enlaces seguirán funcionando, también al abrirlos en una pestaña nueva.
 
 ### Páginas provisionales
 
@@ -273,9 +285,7 @@ Fíjate en `url('/admin/productos')` en el `href`: añade la base de despliegue.
  * Página /login — VERSIÓN PROVISIONAL: entra sin API para probar rutas y guards
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { currentQuery, navigate } from '@features/router/router.state.js'
+import { define, h, navigate, currentQuery } from '@kit'
 import { guardarSesion } from '@features/auth/sesion.state.js'
 import { destinoSeguro } from '@features/auth/auth.actions.js'
 
@@ -299,17 +309,12 @@ define('LoginPage', () =>
  * src/components/pages/ProductosPage.lazy.js — VERSIÓN PROVISIONAL
  */
 
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { url } from '@features/router/router.state.js'
+import { define, h, Link } from '@kit'
 
 define('ProductosPage', () =>
-  c('AdminLayout', {
-    titulo: 'Productos',
-    contenido: h('p', {}, 'Próximamente: el listado. ',
-      h('a', { href: url('/admin/productos/1'), className: 'text-sky-700 hover:underline' }, 'Editar el producto 1')
-    )
-  })
+  h('p', {}, 'Próximamente: el listado. ',
+    Link({ to: '/admin/productos/1', className: 'text-sky-700 hover:underline' }, 'Editar el producto 1')
+  )
 )
 ```
 
@@ -320,15 +325,9 @@ define('ProductosPage', () =>
  * src/components/pages/ProductoEditarPage.lazy.js — VERSIÓN PROVISIONAL
  */
 
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h } from '@kit'
 
-define('ProductoEditarPage', ({ params }) =>
-  c('AdminLayout', {
-    titulo: `Editar producto #${params.id}`,
-    contenido: h('p', {}, 'Próximamente: el formulario.')
-  })
-)
+define('ProductoEditarPage', () => h('p', {}, 'Próximamente: el formulario.'))
 ```
 
 ### Pruébalo
@@ -336,7 +335,7 @@ define('ProductoEditarPage', ({ params }) =>
 Con `npm run dev`:
 
 - [ ] Abre http://localhost:4321/admin/productos/1: te lleva a `/login?volver=%2Fadmin%2Fproductos%2F1`.
-- [ ] Pulsa **Entrar (modo demo)**: vuelves a `/admin/productos/1` y ves "Modo demo" en la cabecera.
+- [ ] Pulsa **Entrar (modo demo)**: vuelves a `/admin/productos/1`, ves "Modo demo" en la cabecera y el título "Editar producto #1".
 - [ ] Visita `/admin`: te redirige a `/admin/productos`.
 - [ ] Visita `/login` con la sesión abierta: te manda al panel.
 - [ ] **Cerrar sesión** te lleva a `/login`, y el panel vuelve a estar protegido.
@@ -391,7 +390,7 @@ Los valores por defecto (`|| 'https://dummyjson.com'`) hacen que la app funcione
  * Cliente HTTP único de la app: URL base, timeout y token salen de la configuración y la sesión
  */
 
-import { HttpClient } from '@core/httpClient.js'
+import { HttpClient } from '@kit'
 import config from '@/config/app.js'
 import { sesion } from '@features/auth/sesion.state.js'
 
@@ -485,7 +484,7 @@ Sustituye `auth.actions.js` por la versión final, que añade `iniciarSesion`:
 
 import { login } from '@/services/auth.service.js'
 import { guardarSesion, borrarSesion } from './sesion.state.js'
-import { navigate } from '@features/router/router.state.js'
+import { navigate } from '@kit'
 
 /**
  * Solo permite volver a rutas internas ('/admin/...'): evita redirecciones abiertas
@@ -514,19 +513,15 @@ Y la página de login provisional por el formulario real:
  * Página /login
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed } from '@core/signal.js'
-import { currentQuery } from '@features/router/router.state.js'
+import { define, h, signal, computed, currentQuery } from '@kit'
 import { iniciarSesion } from '@features/auth/auth.actions.js'
 
 const claseInput = 'w-full rounded-lg border-slate-300'
 
 define('LoginPage', () => {
+  const usuario = signal('')
+  const clave = signal('')
   const estado = signal({ enviando: false, error: '' })
-
-  const usuario = h('input', { name: 'username', autocomplete: 'username', required: true, className: claseInput })
-  const clave = h('input', { name: 'password', type: 'password', autocomplete: 'current-password', required: true, className: claseInput })
 
   const campo = (texto, input) =>
     h('label', { className: 'block space-y-1 text-sm font-medium text-slate-700' }, h('span', {}, texto), input)
@@ -538,7 +533,7 @@ define('LoginPage', () => {
         event.preventDefault()
         estado.set({ enviando: true, error: '' })
         try {
-          await iniciarSesion(usuario.value.trim(), clave.value, currentQuery.get().volver)
+          await iniciarSesion(usuario.get().trim(), clave.get(), currentQuery.get().volver)
         } catch (error) {
           // Con status: la API respondió (credenciales incorrectas…); sin status: red o timeout
           const mensaje = error.status ? error.message : 'No se pudo conectar. Inténtalo de nuevo.'
@@ -547,8 +542,8 @@ define('LoginPage', () => {
       }
     },
       h('h1', { className: 'text-xl font-bold text-slate-900' }, 'Iniciar sesión'),
-      campo('Usuario', usuario),
-      campo('Contraseña', clave),
+      campo('Usuario', h('input', { name: 'username', autocomplete: 'username', required: true, className: claseInput, 'bind:value': usuario })),
+      campo('Contraseña', h('input', { name: 'password', type: 'password', autocomplete: 'current-password', required: true, className: claseInput, 'bind:value': clave })),
       h('p', { className: 'text-sm text-red-600', role: 'alert' }, computed(() => estado.get().error)),
       h('button', {
         type: 'submit',
@@ -560,6 +555,7 @@ define('LoginPage', () => {
 })
 ```
 
+- `'bind:value'` enlaza cada input con su signal: al enviar, `usuario.get()` y `clave.get()` ya tienen lo escrito.
 - `autocomplete="username"` y `"current-password"` permiten que el gestor de contraseñas del navegador rellene el formulario.
 - El error distingue dos casos. Con `status`, la API respondió (por ejemplo, credenciales incorrectas) y mostramos su mensaje. Sin `status`, no hubo respuesta (red caída o timeout).
 - `role="alert"` hace que los lectores de pantalla anuncien el error.
@@ -579,14 +575,11 @@ Sustituye `ProductosPage.lazy.js` por la versión final:
 /**
  * src/components/pages/ProductosPage.lazy.js
  *
- * Página /admin/productos: búsqueda y paginación en la URL, eliminación optimista.
+ * Página /admin/productos: búsqueda y paginación en la URL, borrado optimista.
  * Es *.lazy.js: se descarga la primera vez que se visita la ruta.
  */
 
-import { define, c } from '@components/Component.js'
-import { h, For } from '@features/dom/dom.js'
-import { signal, computed, effect, onCleanup, untrack } from '@core/signal.js'
-import { currentQuery, navigate, url } from '@features/router/router.state.js'
+import { define, h, signal, computed, untrack, resource, For, Show, Link, navigate, currentQuery } from '@kit'
 import { buildQueryString } from '@features/router/router.utils.js'
 import * as productosService from '@/services/productos.service.js'
 
@@ -594,59 +587,51 @@ const precio = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' 
 const rutaListado = (params) => `/admin/productos${buildQueryString(params)}`
 
 define('ProductosPage', () => {
-  const estado = signal({ cargando: true, error: null, productos: [], total: 0 })
-  const aviso = signal('')
-
   // - La URL es el estado de la búsqueda y la página: ?q=phone&pagina=2 -
   const q = computed(() => currentQuery.get().q ?? '')
   const pagina = computed(() => Math.max(1, Number(currentQuery.get().pagina) || 1))
-  const totalPaginas = computed(() => Math.max(1, Math.ceil(estado.get().total / productosService.POR_PAGINA)))
-  const productos = computed(() => estado.get().productos)
+
+  // - Datos: se vuelven a pedir al cambiar q o pagina; la petición anterior se cancela -
+  const listado = resource(
+    () => ({ q: q.get(), pagina: pagina.get() }),
+    (params, { signal }) => productosService.listar({ ...params, signal })
+  )
+  const productos = computed(() => listado.data.get()?.productos ?? [])
+  const total = computed(() => listado.data.get()?.total ?? 0)
+  const totalPaginas = computed(() => Math.max(1, Math.ceil(total.get() / productosService.POR_PAGINA)))
 
   // Mensaje al volver de la página de edición (?guardado=Título)
+  const aviso = signal('')
   const guardado = untrack(() => currentQuery.get().guardado)
   if (guardado) aviso.set(`«${guardado}» guardado (DummyJSON lo simula: no persiste).`)
 
-  // - Carga: se repite al cambiar q o pagina; la petición anterior se cancela -
-  effect(() => {
-    const busqueda = q.get()
-    const numero = pagina.get()
-    const controller = new AbortController()
-    onCleanup(() => controller.abort())
-
-    estado.set({ ...untrack(() => estado.get()), cargando: true, error: null }) // conserva la tabla mientras carga
-    productosService.listar({ q: busqueda, pagina: numero, signal: controller.signal })
-      .then(({ productos, total }) => estado.set({ cargando: false, error: null, productos, total }))
-      .catch((error) => {
-        if (error.name !== 'AbortError') estado.set({ cargando: false, error, productos: [], total: 0 })
-      })
-  })
-
-  // - Eliminación optimista: se quita de la tabla al instante y se revierte si la API falla -
+  // - Borrado optimista: la fila desaparece al instante y vuelve si la API falla -
   const eliminar = async (producto) => {
-    const antes = estado.get()
-    estado.set({ ...antes, productos: antes.productos.filter(p => p.id !== producto.id), total: antes.total - 1 })
+    const antes = listado.data.get()
+    listado.mutate({ productos: antes.productos.filter(p => p.id !== producto.id), total: antes.total - 1 })
     try {
       await productosService.eliminar(producto.id)
       aviso.set(`«${producto.title}» eliminado (DummyJSON lo simula: no persiste).`)
     } catch (error) {
-      estado.set(antes)
+      listado.mutate(antes)
       aviso.set(`No se pudo eliminar «${producto.title}»: ${error.message}`)
     }
   }
 
   // - Vista -
-  const buscador = h('input', { type: 'search', value: untrack(() => q.get()), placeholder: 'Buscar productos…', className: 'flex-1 rounded-lg border-slate-300' })
-
-  const formulario = h('form', {
+  const busqueda = signal(untrack(() => q.get()))
+  const buscador = h('form', {
     className: 'flex gap-2',
     role: 'search',
     onSubmit: (event) => {
       event.preventDefault()
-      const texto = buscador.value.trim()
+      const texto = busqueda.get().trim()
       navigate(rutaListado(texto ? { q: texto } : {}))
     }
-  }, buscador, h('button', { type: 'submit', className: 'rounded-lg bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-700' }, 'Buscar'))
+  },
+    h('input', { type: 'search', placeholder: 'Buscar productos…', className: 'flex-1 rounded-lg border-slate-300', 'bind:value': busqueda }),
+    h('button', { type: 'submit', className: 'rounded-lg bg-sky-600 px-4 py-2 font-medium text-white hover:bg-sky-700' }, 'Buscar')
+  )
 
   const fila = (p) =>
     h('tr', { className: 'border-t border-slate-100' },
@@ -655,12 +640,12 @@ define('ProductosPage', () => {
       h('td', { className: 'py-2 pr-4 text-right tabular-nums' }, precio.format(p.price)),
       h('td', { className: 'py-2 pr-4 text-right tabular-nums' }, p.stock),
       h('td', { className: 'space-x-3 whitespace-nowrap py-2 text-right' },
-        h('a', { href: url(`/admin/productos/${p.id}`), className: 'text-sky-700 hover:underline' }, 'Editar'),
+        Link({ to: `/admin/productos/${p.id}`, className: 'text-sky-700 hover:underline' }, 'Editar'),
         h('button', { className: 'text-red-600 hover:underline', onClick: () => eliminar(p) }, 'Eliminar')
       )
     )
 
-  const tabla = h('table', { className: { 'w-full text-sm': true, 'opacity-50': computed(() => estado.get().cargando) } },
+  const tabla = h('table', { className: { 'w-full text-sm': true, 'opacity-50': listado.loading } },
     h('thead', {},
       h('tr', { className: 'text-left text-slate-500' },
         h('th', { className: 'py-2' }, ''), h('th', {}, 'Producto'),
@@ -671,27 +656,24 @@ define('ProductosPage', () => {
   )
 
   const enlace = (texto, numero) =>
-    h('a', { href: url(rutaListado({ ...(q.get() && { q: q.get() }), pagina: numero })), className: 'text-sky-700 hover:underline' }, texto)
+    Link({ to: rutaListado({ ...(q.get() && { q: q.get() }), pagina: numero }), className: 'text-sky-700 hover:underline' }, texto)
 
-  const contenido = h('div', { className: 'space-y-4' },
-    formulario,
-    computed(() => aviso.get() && h('p', { className: 'rounded-lg bg-green-50 px-4 py-2 text-sm text-green-800', role: 'status' }, aviso.get())),
-    computed(() => estado.get().error && h('p', { className: 'text-red-600', role: 'alert' }, `Error al cargar: ${estado.get().error.message}`)),
+  return h('div', { className: 'space-y-4' },
+    buscador,
+    Show(aviso, () => h('p', { className: 'rounded-lg bg-green-50 px-4 py-2 text-sm text-green-800', role: 'status' }, aviso)),
+    Show(listado.error, () => h('p', { className: 'text-red-600', role: 'alert' }, computed(() => `Error al cargar: ${listado.error.get()?.message}`))),
     h('div', { className: 'overflow-x-auto rounded-xl bg-white p-4 shadow ring-1 ring-slate-200' }, tabla),
-    computed(() => {
-      const { cargando, error, productos } = estado.get()
-      return !cargando && !error && productos.length === 0 && h('p', { className: 'text-slate-500' }, 'No hay productos que coincidan.')
-    }),
+    Show(() => !listado.loading.get() && !listado.error.get() && productos.get().length === 0, () =>
+      h('p', { className: 'text-slate-500' }, 'No hay productos que coincidan.')
+    ),
     h('nav', { className: 'flex items-center justify-between text-sm text-slate-500' },
-      h('span', {}, computed(() => `${estado.get().total} productos · página ${pagina.get()} de ${totalPaginas.get()}`)),
+      h('span', {}, computed(() => `${total.get()} productos · página ${pagina.get()} de ${totalPaginas.get()}`)),
       h('div', { className: 'space-x-4' },
         computed(() => pagina.get() > 1 && enlace('← Anterior', pagina.get() - 1)),
         computed(() => pagina.get() < totalPaginas.get() && enlace('Siguiente →', pagina.get() + 1))
       )
     )
   )
-
-  return c('AdminLayout', { titulo: 'Productos', contenido })
 })
 ```
 
@@ -701,10 +683,10 @@ Las ideas clave:
    - funcionan los botones atrás y adelante;
    - se puede compartir un enlace a "página 2 de los resultados de phone";
    - al recargar no se pierde nada.
-2. **Cargar y cancelar.** El `effect` se vuelve a ejecutar cuando cambian `q` o `pagina`. Su `onCleanup` cancela la petición anterior con `AbortController`, así que una respuesta lenta nunca pisa a una más reciente. Al salir de la página también se cancela; el kit registra esas cancelaciones como `debug`, no como errores.
-3. **`untrack` dentro del effect.** Para conservar la tabla mientras carga leemos `estado`, pero con `untrack`. Si lo leyéramos normalmente, el effect dependería de `estado` y se volvería a ejecutar cada vez que lo actualiza: un bucle.
-4. **`For` para las filas.** Al borrar un producto, `For` quita solo esa fila; las demás conservan su nodo.
-5. **Borrado optimista.** La fila desaparece **antes** de que responda la API. Si la API falla, se restaura el estado anterior y se avisa. La interfaz se siente instantánea sin mentir al usuario.
+2. **`resource` carga y cancela.** Su fuente (`{ q, pagina }`) se vuelve a evaluar cuando cambia la URL, y entonces pide de nuevo y **cancela la petición anterior**: una respuesta lenta nunca pisa a una más reciente. Al salir de la página también se cancela (el kit registra esas cancelaciones como `debug`, no como errores). Mientras recarga, `data` conserva los datos anteriores y la tabla se atenúa con `loading`.
+3. **`For` para las filas.** Al borrar un producto, `For` quita solo esa fila; las demás conservan su nodo.
+4. **Borrado optimista con `mutate`.** `listado.mutate(…)` cambia los datos en local: la fila desaparece **antes** de que responda la API. Si la API falla, `mutate(antes)` los restaura y se avisa. La interfaz se siente instantánea sin mentir al usuario.
+5. **`Show` para los estados.** El aviso, el error y "No hay productos" aparecen y desaparecen solos según `aviso`, `listado.error` y `listado.loading`.
 
 ## 8. Edición con validación
 
@@ -717,33 +699,32 @@ Sustituye `ProductoEditarPage.lazy.js` por la versión final:
  * Página /admin/productos/:id: formulario con validación en vivo
  */
 
-import { define, c } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { signal, computed, onCleanup, untrack } from '@core/signal.js'
-import { navigate, url } from '@features/router/router.state.js'
+import { define, h, signal, computed, resource, Show, Link, navigate } from '@kit'
 import { buildQueryString } from '@features/router/router.utils.js'
 import * as productosService from '@/services/productos.service.js'
 
 const formulario = (producto) => {
+  // bind:value: el texto es string y los campos type=number guardan números (vacío → null)
   const titulo = signal(producto.title)
-  const precio = signal(String(producto.price))
-  const stock = signal(String(producto.stock))
+  const precio = signal(producto.price)
+  const stock = signal(producto.stock)
   const guardando = signal(false)
   const errorGuardar = signal('')
 
   const errores = computed(() => ({
     titulo: titulo.get().trim() ? '' : 'El título es obligatorio.',
-    precio: Number(precio.get()) > 0 ? '' : 'El precio debe ser mayor que 0.',
-    stock: /^\d+$/.test(stock.get()) ? '' : 'El stock debe ser un número entero (0 o más).'
+    precio: precio.get() > 0 ? '' : 'El precio debe ser mayor que 0.',
+    stock: Number.isInteger(stock.get()) && stock.get() >= 0 ? '' : 'El stock debe ser un número entero (0 o más).'
   }))
   const valido = computed(() => Object.values(errores.get()).every(e => !e))
 
-  const campo = (etiqueta, sig, clave, attrs) =>
+  const campo = (etiqueta, clave, input) =>
     h('label', { className: 'block space-y-1' },
       h('span', { className: 'text-sm font-medium text-slate-700' }, etiqueta),
-      h('input', { ...attrs, className: 'w-full rounded-lg border-slate-300', onInput: (e) => sig.set(e.target.value) }),
+      input,
       h('span', { className: 'text-sm text-red-600' }, computed(() => errores.get()[clave]))
     )
+  const claseInput = 'w-full rounded-lg border-slate-300'
 
   return h('form', {
     className: 'max-w-md space-y-4 rounded-xl bg-white p-6 shadow ring-1 ring-slate-200',
@@ -755,8 +736,8 @@ const formulario = (producto) => {
       try {
         const actualizado = await productosService.actualizar(producto.id, {
           title: titulo.get().trim(),
-          price: Number(precio.get()),
-          stock: Number(stock.get())
+          price: precio.get(),
+          stock: stock.get()
         })
         navigate(`/admin/productos${buildQueryString({ guardado: actualizado.title })}`)
       } catch (error) {
@@ -765,9 +746,9 @@ const formulario = (producto) => {
       }
     }
   },
-    campo('Título', titulo, 'titulo', { value: producto.title }),
-    campo('Precio (USD)', precio, 'precio', { type: 'number', step: '0.01', min: '0', value: String(producto.price) }),
-    campo('Stock', stock, 'stock', { type: 'number', step: '1', min: '0', value: String(producto.stock) }),
+    campo('Título', 'titulo', h('input', { className: claseInput, 'bind:value': titulo })),
+    campo('Precio (USD)', 'precio', h('input', { type: 'number', step: '0.01', min: '0', className: claseInput, 'bind:value': precio })),
+    campo('Stock', 'stock', h('input', { type: 'number', step: '1', min: '0', className: claseInput, 'bind:value': stock })),
     h('p', { className: 'text-sm text-red-600', role: 'alert' }, errorGuardar),
     h('button', {
       type: 'submit',
@@ -778,37 +759,24 @@ const formulario = (producto) => {
 }
 
 define('ProductoEditarPage', ({ params }) => {
-  const estado = signal({ cargando: true, error: null, producto: null })
+  const producto = resource(() => params.id, (id, { signal }) => productosService.obtener(id, { signal }))
 
-  const controller = new AbortController()
-  onCleanup(() => controller.abort())
-
-  productosService.obtener(params.id, { signal: controller.signal })
-    .then(producto => estado.set({ cargando: false, error: null, producto }))
-    .catch(error => {
-      if (error.name !== 'AbortError') estado.set({ cargando: false, error, producto: null })
-    })
-
-  const cuerpo = computed(() => {
-    const { cargando, error, producto } = estado.get()
-    if (cargando) return h('p', { className: 'text-slate-500' }, 'Cargando…')
-    if (error) return h('p', { className: 'text-red-600', role: 'alert' }, error.status === 404 ? 'Ese producto no existe.' : `Error: ${error.message}`)
-    return untrack(() => formulario(producto)) // untrack: escribir en el formulario no debe re-crearlo
-  })
-
-  return c('AdminLayout', {
-    titulo: `Editar producto #${params.id}`,
-    contenido: h('div', { className: 'space-y-4' },
-      h('a', { href: url('/admin/productos'), className: 'text-sm text-sky-700 hover:underline' }, '← Volver al listado'),
-      cuerpo
-    )
-  })
+  return h('div', { className: 'space-y-4' },
+    Link({ to: '/admin/productos', className: 'text-sm text-sky-700 hover:underline' }, '← Volver al listado'),
+    Show(producto.loading, () => h('p', { className: 'text-slate-500' }, 'Cargando…')),
+    Show(producto.error, () => h('p', { className: 'text-red-600', role: 'alert' },
+      computed(() => (producto.error.get()?.status === 404 ? 'Ese producto no existe.' : `Error: ${producto.error.get()?.message}`))
+    )),
+    // Show construye el formulario una vez, cuando llegan los datos (no al escribir)
+    Show(producto.data, () => formulario(producto.data.get()))
+  )
 })
 ```
 
-- **Un signal por campo** y un `computed` con todos los errores: el mensaje y el botón deshabilitado se actualizan en cada tecla.
-- **`untrack(() => formulario(producto))`.** `cuerpo` es un `computed` que devuelve el nodo del formulario. Si `formulario()` leyera algún signal al construirse, `cuerpo` dependería de él y el formulario entero se recrearía al escribir, perdiendo el foco. `untrack` lo evita.
-- **Los inputs usan el valor inicial** (`value: producto.title`), no el signal. El input es la fuente de verdad mientras se escribe, y `onInput` mantiene el signal sincronizado.
+- **`resource(() => params.id, …)`** carga el producto. `Show` muestra "Cargando…", el error ("Ese producto no existe." si la API responde 404) o el formulario.
+- **`Show(producto.data, () => formulario(…))`** construye el formulario **una sola vez**, cuando llegan los datos. Escribir en él no lo vuelve a crear, así que no se pierde el foco.
+- **Un signal por campo con `bind:value`.** En los inputs `type="number"`, `bind:value` guarda **números** (vacío → `null`), así que la validación compara números y el `PUT` envía `price: 24.5`, no `"24.5"`. Mientras escribes "24." el campo no se reescribe.
+- **Un `computed` con todos los errores:** el mensaje y el botón deshabilitado se actualizan en cada tecla.
 - **Tras guardar** se vuelve a `/admin/productos?guardado=…` y el listado muestra el aviso.
 
 ¡El panel está completo! Pruébalo de principio a fin: entrar, buscar, paginar, editar, borrar y cerrar sesión.
@@ -931,16 +899,27 @@ describe('sesión y guards', () => {
 `src/components/pages/panel.test.js`:
 
 ```js
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import '@components/index.js'
-import { renderApp } from '@components/Component.js'
-import { navigate } from '@features/router/router.state.js'
+import { renderApp, navigate } from '@kit'
 import { sesion } from '@features/auth/sesion.state.js'
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const settle = async () => { for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r)) }
 const lista = (n, total = 23) => json({ products: Array.from({ length: n }, (_, i) => ({ id: i + 1, title: `P${i + 1}`, price: 10, stock: 5, thumbnail: '' })), total })
+const sesionValida = () => ({ token: 'tok', expiraEn: Date.now() + 60_000, usuario: { id: 1, nombre: 'Ana López' } })
+
+// Cada test prepara su propia sesión, su ruta y sus respuestas: no depende del orden
+const empezar = async ({ conSesion = true, ruta = '/', respuesta = () => lista(10) } = {}) => {
+  vi.stubGlobal('fetch', vi.fn((url, init) => Promise.resolve(respuesta(url, init))))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  sesion.set(conSesion ? sesionValida() : null)
+  navigate('/')
+  await settle()
+  navigate(ruta)
+  await settle()
+}
 
 let root
 
@@ -949,52 +928,64 @@ describe('panel (integración)', () => {
     root = document.createElement('div')
     renderApp('App', root)
   })
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn())
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-  })
-  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+  beforeEach(() => localStorage.clear())
 
   it('sin sesión, /admin lleva al login con ?volver', async () => {
-    sesion.set(null)
-    navigate('/admin')
-    await settle()
+    await empezar({ conSesion: false, ruta: '/admin' })
     expect(location.pathname + location.search).toBe('/login?volver=%2Fadmin%2Fproductos')
     expect(root.querySelector('h1').textContent).toBe('Iniciar sesión')
+    expect(document.title).toBe('Iniciar sesión · signals-starter-kit')
   })
 
-  it('login correcto vuelve a la ruta pedida', async () => {
-    fetch.mockImplementation((u) => Promise.resolve(u.includes('/auth/login')
-      ? json({ id: 1, firstName: 'Ana', lastName: 'López', image: '', accessToken: 'tok' })
-      : lista(10)))
-    root.querySelector('input[name=username]').value = 'ana'
-    root.querySelector('input[name=password]').value = 'x'
+  it('login correcto vuelve a la ruta pedida, dentro del layout del panel', async () => {
+    await empezar({
+      conSesion: false,
+      ruta: '/admin',
+      respuesta: (url) => (url.includes('/auth/login')
+        ? json({ id: 1, firstName: 'Ana', lastName: 'López', image: '', accessToken: 'tok' })
+        : lista(10))
+    })
+    const [usuario, clave] = root.querySelectorAll('input')
+    usuario.value = 'ana'; usuario.dispatchEvent(new Event('input'))
+    clave.value = 'x'; clave.dispatchEvent(new Event('input'))
     root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }))
     await settle()
     expect(location.pathname).toBe('/admin/productos')
     expect(root.textContent).toContain('Ana López')
+    expect(root.querySelector('main h1').textContent).toBe('Productos') // título del layout
     expect(root.querySelectorAll('tbody tr').length).toBe(10)
     expect(root.textContent).toContain('23 productos · página 1 de 3')
   })
 
-  it('la paginación y la búsqueda van en la URL', async () => {
-    fetch.mockImplementation(() => Promise.resolve(lista(3)))
-    navigate('/admin/productos?pagina=3')
-    await settle()
+  it('la paginación va en la URL', async () => {
+    await empezar({ ruta: '/admin/productos?pagina=3', respuesta: () => lista(3) })
     expect(fetch.mock.calls.at(-1)[0]).toContain('skip=20')
     expect(root.textContent).toContain('página 3 de 3')
     expect(root.textContent).toContain('← Anterior')
     expect(root.textContent).not.toContain('Siguiente →')
   })
 
-  it('eliminación optimista: quita la fila al instante y la restaura si la API falla', async () => {
-    fetch.mockImplementation(() => Promise.resolve(lista(3)))
-    navigate('/admin/productos?pagina=1')
+  it('el layout se conserva al navegar entre páginas del panel', async () => {
+    await empezar({ ruta: '/admin/productos' })
+    const cabecera = root.querySelector('header')
+    navigate('/admin/productos/1')
     await settle()
+    expect(root.querySelector('header')).toBe(cabecera)
+    expect(root.querySelector('main h1').textContent).toBe('Editar producto #1')
+  })
+
+  it('eliminación optimista: quita la fila al instante y la restaura si la API falla', async () => {
     let rechazar
-    fetch.mockImplementation(() => new Promise((_, rej) => { rechazar = rej }))
+    await empezar({
+      ruta: '/admin/productos',
+      respuesta: (url, init) => (init?.method === 'DELETE' ? new Promise((_, rej) => { rechazar = rej }) : lista(3))
+    })
+    // fetch devuelve la promesa pendiente tal cual para DELETE
+    fetch.mockImplementation((url, init) => (init?.method === 'DELETE'
+      ? new Promise((_, rej) => { rechazar = rej })
+      : Promise.resolve(lista(3))))
     root.querySelector('tbody tr button').click()
-    await new Promise(r => setTimeout(r)) // deja correr el effect de la lista
+    await new Promise(r => setTimeout(r))
     expect(root.querySelectorAll('tbody tr').length).toBe(2) // optimista
     rechazar(new TypeError('Failed to fetch'))
     await settle()
@@ -1002,36 +993,32 @@ describe('panel (integración)', () => {
     expect(root.textContent).toContain('No se pudo eliminar «P1»')
   })
 
-  it('editar: valida en vivo y guarda', async () => {
-    fetch.mockImplementation(() => Promise.resolve(json({ id: 1, title: 'P1', price: 10, stock: 5 })))
-    navigate('/admin/productos/1')
-    await settle()
-    const [titulo] = root.querySelectorAll('form input')
+  it('editar: valida en vivo (números con bind:value) y guarda', async () => {
+    await empezar({
+      ruta: '/admin/productos/1',
+      respuesta: (url, init) => (init?.method === 'PUT'
+        ? json({ id: 1, title: 'Nuevo nombre', price: 12.5, stock: 5 })
+        : url.includes('/products/1') ? json({ id: 1, title: 'P1', price: 10, stock: 5 }) : lista(10))
+    })
+    const [titulo, precio] = root.querySelectorAll('form input')
     const boton = root.querySelector('form button')
-    titulo.value = '  '
-    titulo.dispatchEvent(new Event('input'))
-    await settle()
+    titulo.value = '  '; titulo.dispatchEvent(new Event('input')); await settle()
     expect(root.textContent).toContain('El título es obligatorio.')
     expect(boton.disabled).toBe(true)
-    titulo.value = 'Nuevo nombre'
-    titulo.dispatchEvent(new Event('input'))
-    await settle()
+    titulo.value = 'Nuevo nombre'; titulo.dispatchEvent(new Event('input'))
+    precio.value = '12.5'; precio.dispatchEvent(new Event('input')); await settle()
     expect(boton.disabled).toBe(false)
 
-    fetch.mockImplementation((u, init) => Promise.resolve(init?.method === 'PUT'
-      ? json({ id: 1, title: 'Nuevo nombre', price: 10, stock: 5 })
-      : lista(10)))
     root.querySelector('form').dispatchEvent(new Event('submit', { cancelable: true }))
     await settle()
-    expect(JSON.parse(fetch.mock.calls.find(c => c[1]?.method === 'PUT')[1].body).title).toBe('Nuevo nombre')
+    const cuerpo = JSON.parse(fetch.mock.calls.find(c => c[1]?.method === 'PUT')[1].body)
+    expect(cuerpo).toEqual({ title: 'Nuevo nombre', price: 12.5, stock: 5 }) // números, no strings
     expect(location.pathname).toBe('/admin/productos')
     expect(root.textContent).toContain('«Nuevo nombre» guardado')
   })
 
   it('cerrar sesión vuelve al login y protege el panel', async () => {
-    fetch.mockImplementation(() => Promise.resolve(lista(1)))
-    navigate('/admin/productos')
-    await settle()
+    await empezar({ ruta: '/admin/productos' })
     ;[...root.querySelectorAll('button')].find(b => b.textContent === 'Cerrar sesión').click()
     await settle()
     expect(location.pathname).toBe('/login')
@@ -1046,7 +1033,9 @@ describe('panel (integración)', () => {
 npm test
 ```
 
-Los tests de integración montan la app entera en jsdom y la recorren como un usuario: login, listado, paginación, borrado optimista con fallo de la API, edición y cierre de sesión.
+Los tests de integración montan la app entera en jsdom y la recorren como un usuario: login, listado, paginación, layout conservado, borrado optimista con fallo de la API, edición y cierre de sesión.
+
+Cada test empieza con `empezar({ conSesion, ruta, respuesta })`, que prepara **su propia** sesión, ruta y respuestas de la API. Así ningún test depende de lo que dejó el anterior, y la suite pasa en cualquier orden (`npx vitest run --sequence.shuffle`).
 
 > Cada llamada simulada a `fetch` devuelve una `Response` **nueva** (`mockImplementation(() => Promise.resolve(json(...)))`): el cuerpo de una respuesta solo se puede leer una vez.
 
@@ -1160,8 +1149,8 @@ Lo que acabas de aplicar, para usarlo en tus proyectos:
 - [x] Estados de carga, vacío y error en cada pantalla.
 - [x] Actualizaciones optimistas con reversión.
 - [x] Accesibilidad básica (`role="alert"`, `role="status"`, `autocomplete`).
-- [x] Carga diferida de las páginas pesadas.
-- [x] Tests de servicios, reglas e integración.
+- [x] Carga diferida de las páginas pesadas, dentro de un layout que no se vuelve a montar.
+- [x] Tests de servicios, reglas e integración, independientes del orden.
 - [x] CI y despliegue automáticos.
 
 ## Siguientes pasos
