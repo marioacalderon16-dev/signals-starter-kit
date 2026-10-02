@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { define, c } from './Component.js'
 import { createRoot, getStats } from '@core/signal.js'
 import { navigate } from '@features/router/router.state.js'
+import { registerRoutes } from '@features/router/router.utils.js'
 
 const defineP = (name) => define(name, () => Object.assign(document.createElement('p'), { textContent: `página:${name}` }))
 
@@ -16,16 +17,16 @@ const cargas = vi.hoisted(() => {
   return { pendientes, contador, diferida }
 })
 
-vi.mock('@features/router/routes.config.js', () => ({
-  routes: [
+// Rutas de prueba: desde la v2 se registran con registerRoutes (el router ya no importa routes.config.js)
+const routes = [
     { path: '/', component: 'Inicio', name: 'inicio' },
     { path: '/perezosa', component: 'Perezosa', name: 'perezosa', load: cargas.diferida('Perezosa') },
     { path: '/lenta', component: 'Lenta', name: 'lenta', load: cargas.diferida('Lenta') },
     { path: '/unica', component: 'Unica', name: 'unica', load: cargas.diferida('Unica') },
     { path: '/rota', component: 'Rota', name: 'rota', load: cargas.diferida('Rota') },
     { path: '/rota-lenta', component: 'RotaLenta', name: 'rota-lenta', load: cargas.diferida('RotaLenta') },
-  ]
-}))
+]
+registerRoutes(routes)
 
 // Deja correr las microtasks (effects del router y callbacks de las promesas)
 const microtasks = async () => { for (let i = 0; i < 10; i++) await Promise.resolve() }

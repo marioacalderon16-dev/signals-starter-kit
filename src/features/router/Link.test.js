@@ -2,17 +2,18 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { Link } from './Link.js'
 import { navigate } from './router.state.js'
 import { createRoot } from '@core/signal.js'
+import { registerRoutes } from './router.utils.js'
 
 const cargarAdmin = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 
-vi.mock('./routes.config.js', () => ({
-  routes: [
+// Rutas de prueba: desde la v2 se registran con registerRoutes (el router ya no importa routes.config.js)
+const routes = [
     { path: '/', component: 'Inicio' },
     { path: '/admin', component: 'Admin', load: cargarAdmin },
     { path: '/admin/usuarios', component: 'Usuarios' },
     { path: '/acerca', component: 'Acerca' },
-  ]
-}))
+]
+registerRoutes(routes)
 
 const tick = () => new Promise(r => setTimeout(r))
 const montar = (fn) => createRoot(() => { const el = fn(); document.body.appendChild(el); return el })

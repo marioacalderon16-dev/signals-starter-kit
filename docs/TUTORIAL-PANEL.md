@@ -79,7 +79,7 @@ src/
         └── ProductoEditarPage.lazy.js
 ```
 
-Casi todo se importa desde un único sitio, `'@kit'`: signals, `h`, `For`, `Show`, `Link`, `resource`, `navigate`… La excepción, y su porqué, aparece en el capítulo 3.
+Todo se importa desde un único sitio, `'@kit'`: signals, `h`, `For`, `Show`, `Link`, `resource`, `navigate`, `persist`…
 
 ### Los tres flujos principales
 
@@ -120,10 +120,7 @@ Antes de hablar con ninguna API, montamos la estructura completa con **páginas 
  * Sesión del usuario: un signal persistido en localStorage
  */
 
-// Este módulo lo importan los guards, y los guards los importa routes.config.js:
-// por eso importa del núcleo y no de '@kit' (que incluye el router → evitaría un ciclo)
-import { signal, computed } from '@core/signal.js'
-import { persist } from '@shared/utils/persist.js'
+import { signal, computed, persist } from '@kit'
 
 // { token, expiraEn (ms), usuario: { id, nombre, imagen } } o null
 export const sesion = signal(null)
@@ -143,7 +140,7 @@ export const borrarSesion = () => sesion.set(null)
 
 `sesionValida()` es una función, no un `computed`: depende de la hora (`Date.now()`), que no es reactiva. Se comprueba al navegar, que es justo cuando la necesitamos.
 
-> **Por qué este archivo no importa de `'@kit'`.** `routes.config.js` importa los guards, y los guards importan la sesión. `'@kit'` incluye el router, que a su vez importa `routes.config.js`: si la sesión importara `'@kit'`, se formaría un ciclo de importación. El kit ordena sus exportaciones para tolerarlo, pero un ciclo así es frágil (según el orden de carga, en los tests, por ejemplo, `persist` podría no existir todavía). Regla: **lo que importa `routes.config.js` (guards y lo que estos usen) importa del núcleo** (`@core/…`, `@shared/…`) y no llama a `navigate` ni a `generateUrl` al cargarse, solo dentro de funciones. El resto de la app usa `'@kit'`.
+> **Las rutas se registran en `main.js`.** El kit ya trae en `src/main.js` la línea `registerRoutes(routes)`: el router no importa `routes.config.js` por su cuenta. Por eso los guards y la sesión pueden importar `'@kit'` sin crear ningún ciclo de importación.
 
 ### Los guards
 
@@ -151,8 +148,8 @@ export const borrarSesion = () => sesion.set(null)
 /**
  * src/features/auth/auth.guards.js
  *
- * Guards de rutas. Solo dependen de la sesión (no del router) para que
- * routes.config.js pueda importarlos sin crear dependencias circulares.
+ * Guards de rutas: funciones puras que solo leen la sesión. Se evalúan al navegar;
+ * para redirigir devuelven una ruta (no llaman a navigate).
  */
 
 import { sesionValida } from './sesion.state.js'
@@ -168,7 +165,7 @@ export const requiereSesion = ({ path, query }) => {
 export const soloInvitados = () => (sesionValida() ? '/admin' : true)
 ```
 
-Los guards viven en su propio archivo y **solo importan la sesión**. Si importaran el router, `routes.config.js` → guards → router → `routes.config.js` formarían una dependencia circular.
+Los guards viven en su propio archivo y **solo leen la sesión**: no navegan, **devuelven** la ruta a la que redirigir y el router se encarga del resto. Así son funciones puras, fáciles de probar (lo verás en el capítulo 9).
 
 ### Las acciones (primera versión)
 
@@ -901,7 +898,8 @@ describe('sesión y guards', () => {
 ```js
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import '@components/index.js'
-import { renderApp, navigate } from '@kit'
+import { renderApp, navigate, registerRoutes } from '@kit'
+import { routes } from '@features/router/routes.config.js'
 import { sesion } from '@features/auth/sesion.state.js'
 
 const json = (body, status = 200) =>
@@ -925,6 +923,7 @@ let root
 
 describe('panel (integración)', () => {
   beforeAll(() => {
+    registerRoutes(routes) // como en main.js
     root = document.createElement('div')
     renderApp('App', root)
   })

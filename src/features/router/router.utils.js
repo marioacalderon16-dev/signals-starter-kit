@@ -1,7 +1,36 @@
 // src/features/router/router.utils.js
 // Utilidades para el router (matching de rutas)
 
-import { routes } from './routes.config.js'
+import { signal, untrack } from '@core/signal.js'
+
+// v2: el router NO importa routes.config.js (eso creaba un ciclo de importación con los
+// guards de la app). Las rutas se registran desde main.js con registerRoutes(routes).
+let routes = []
+let avisado = false
+// Cambia en cada registerRoutes: matchRoute lo lee, así el Router se vuelve a evaluar
+// si las rutas se registran (o reemplazan) después de montarlo
+const versionRutas = signal(0)
+
+/**
+ * Registra la tabla de rutas de la app. Se llama una vez en main.js, antes de renderApp:
+ *   import { routes } from '@features/router/routes.config.js'
+ *   registerRoutes(routes)
+ * Guarda la referencia al array (no una copia): añadir rutas con push después también cuenta,
+ * pero solo se reevalúa la ruta actual al volver a llamar a registerRoutes o al navegar.
+ * @param {Array} tablaDeRutas - Array de rutas ({ path, component, … })
+ * @throws {TypeError} si no es un array
+ */
+export function registerRoutes(tablaDeRutas) {
+  if (!Array.isArray(tablaDeRutas)) {
+    throw new TypeError('registerRoutes(routes) necesita el array de rutas de routes.config.js')
+  }
+  routes = tablaDeRutas
+  avisado = false // si vuelve a quedarse sin rutas, el aviso vuelve a salir
+  versionRutas.set(untrack(() => versionRutas.get()) + 1) // untrack: llamarlo desde un effect no crea un bucle
+}
+
+/** ¿Se ha registrado alguna ruta? (el Router lo usa para explicar la migración a la v2) */
+export const hasRoutes = () => routes.length > 0
 
 /**
  * Encuentra la ruta que coincide con el path actual y extrae los parámetros.
@@ -9,6 +38,13 @@ import { routes } from './routes.config.js'
  * @returns {Object|null} - Un objeto con el componente y los parámetros, o null.
  */
 export function matchRoute(path) {
+  versionRutas.get() // dependencia reactiva: registrar rutas reevalúa el Router
+  if (routes.length === 0 && !avisado) {
+    avisado = true
+    console.warn('[ROUTER] No hay rutas registradas. Desde la v2, añade en src/main.js (antes de renderApp):\n' +
+      "  import { routes } from '@features/router/routes.config.js'\n" +
+      '  registerRoutes(routes)')
+  }
   for (const route of routes) {
     const { regex, paramNames } = compileRoute(route.path)
     const match = path.match(regex)

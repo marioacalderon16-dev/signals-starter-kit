@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { matchRoute, parseQueryParams } from './router.utils.js'
+import { matchRoute, parseQueryParams, registerRoutes } from './router.utils.js'
 import { currentPath, currentQuery, navigate, replace, normalizePath } from './router.state.js'
 import { effect } from '@core/signal.js'
 
-vi.mock('./routes.config.js', () => ({
-  routes: [
+// Rutas de prueba: desde la v2 se registran con registerRoutes (el router ya no importa routes.config.js)
+const routes = [
     { path: '/', component: 'Home', name: 'home' },
     { path: '/a.b', component: 'Dot', name: 'dot' },
     { path: '/files/*/x/*', component: 'Files', name: 'files' },
     { path: '/docs/*/:id', component: 'Doc', name: 'doc' },
     { path: '/products/:id', component: 'Product', name: 'product' },
-  ]
-}))
+]
+registerRoutes(routes)
 
 
 describe('matchRoute', () => {

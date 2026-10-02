@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import '@components/index.js'
 import { renderApp } from '@components/Component.js'
+import { registerRoutes } from '@features/router/router.utils.js'
+import { routes } from '@features/router/routes.config.js'
 import { navigate } from '@features/router/router.state.js'
 import { temperatura, cargando } from '@features/weather/weather.state.js'
+
+registerRoutes(routes) // como en main.js
 
 const tick = () => new Promise(r => setTimeout(r))
 

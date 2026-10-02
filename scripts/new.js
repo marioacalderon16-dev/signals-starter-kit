@@ -108,8 +108,7 @@ const plantillaFeature = (nombre) => `/**
  * Estado y acciones de ${nombre}
  */
 
-// Del núcleo y no de '@kit': un estado puede acabar importado por un guard de routes.config
-import { signal, computed } from '@core/signal.js'
+import { signal, computed } from '@kit'
 
 // - Estado -
 export const ${nombre} = signal([])

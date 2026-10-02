@@ -2,6 +2,8 @@
 
 Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reactivo propio: **signals**, una función `h()` para crear DOM, componentes registrados por nombre y un router basado en la History API. Sin React ni Vue: todo el framework son unos pocos archivos que puedes leer y modificar.
 
+> **Versión 2.0.** Si vienes de la 1.x, la migración es una línea en `main.js`: mira el [CHANGELOG](CHANGELOG.md). La 1.x sigue disponible con la etiqueta `v1.0.0`.
+
 Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima) y 68 tests.
 
 👉 **¿Empiezas?** Sigue el [tutorial de inicio rápido](docs/QUICKSTART.md): construyes una lista de tareas paso a paso en unos 20 minutos. ¿Quieres ver de qué es capaz? Mira las [recetas](docs/RECETAS.md): siete ejemplos cortos, de un formulario con validación a datos de una API o un tema oscuro. Y cuando quieras algo de nivel profesional, el [tutorial del panel de administración](docs/TUTORIAL-PANEL.md) cubre login, rutas protegidas, CRUD, tests, CI y despliegue en GitHub Pages.
@@ -85,7 +87,7 @@ Definidas en `.env` (no se versiona; usa `.env.example` como plantilla):
 
 ```
 src/
-├── main.js                  # Punto de entrada: monta el componente App en #app
+├── main.js                  # Punto de entrada: registra las rutas y monta App en #app
 ├── kit.js                   # API pública del kit: import { … } from '@kit'
 ├── style.css                # Tailwind
 ├── config/app.js            # Configuración leída de .env
@@ -123,7 +125,7 @@ import { signal, computed, effect, resource, h, For, Show, define, c, Link, navi
 
 `@kit` (`src/kit.js`) reexporta la reactividad, el DOM, los componentes, el router, `HttpClient` y `persist`. Los módulos internos (`@core/…`, `@features/…`) siguen disponibles para usos avanzados. `generateUrl` se importa de `@features/router/routes.config.js`.
 
-> **Ciclo de importación con los guards.** `routes.config.js` importa los guards de tu app; si un guard (o algo que importe, como el estado de la sesión) importa `'@kit'`, se forma un ciclo: `'@kit'` incluye el router, que importa `routes.config.js`. El kit ordena sus exportaciones para tolerarlo (todo lo que no es router se carga antes), pero lo más robusto es que **lo que importa `routes.config.js` importe del núcleo** (`@core/signal.js`, `@shared/utils/persist.js`…) y que no llame a `navigate` ni a `generateUrl` al cargarse, solo dentro de funciones.
+> **Novedad de la 2.0:** las rutas se registran en `main.js` con `registerRoutes(routes)` (ver [Router](#router) y el [CHANGELOG](CHANGELOG.md)). Gracias a eso, los guards y todo tu código pueden importar `'@kit'` sin restricciones.
 
 ### Signals
 
@@ -254,6 +256,18 @@ export const routes = [
 ]
 ```
 
+y se registran al arrancar, en `src/main.js` (el kit ya trae esta línea):
+
+```js
+import { renderApp, registerRoutes } from '@kit'
+import { routes } from '@features/router/routes.config.js'
+
+registerRoutes(routes)
+renderApp('App', document.getElementById('app'))
+```
+
+En los tests que montan el `Router`, registra las rutas igual (o una tabla de prueba: `registerRoutes([...])`). Si se te olvida, la app muestra "No hay rutas registradas…" y la consola indica la línea que falta.
+
 La página recibe los parámetros como `props.params` (ya decodificados):
 
 ```js
@@ -327,7 +341,6 @@ export const routes = [
 - `redirect` (texto o función) y `beforeEnter` (devuelve una ruta para redirigir; cualquier otro valor deja pasar) reciben `{ path, params, query }`.
 - Las redirecciones usan `replace`: no dejan entradas extra en el historial. Los bucles se cortan a las 10 redirecciones.
 - El guard se evalúa al navegar, no cuando cambia un signal que lee: tras cerrar sesión, llama a `navigate('/login')`.
-- El estado que usa el guard (aquí `sesion`) conviene que importe del núcleo y no de `'@kit'`: ver [Ciclo de importación con los guards](#conceptos).
 
 #### Carga diferida de páginas
 

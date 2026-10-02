@@ -4,7 +4,7 @@
 import { signal, effect, onCleanup, untrack } from '@core/index.js'
 import { define, c, render, getComponent } from '@components/Component.js'
 import { currentPath, currentQuery, replace, normalizePath } from '@features/router/router.state.js'
-import { matchRoute } from '@features/router/router.utils.js'
+import { matchRoute, hasRoutes } from '@features/router/router.utils.js'
 import { logger } from '@shared/utils/logger.js'
 import config from '@/config/app.js'
 
@@ -175,6 +175,11 @@ define('Router', () => {
     const id = ++navegacion
 
     if (!routeMatch) {
+      // Sin rutas registradas no es un 404: falta registerRoutes(routes) en main.js (migración a la v2)
+      if (!hasRoutes()) {
+        mostrarTexto('No hay rutas registradas: añade registerRoutes(routes) en src/main.js (ver la consola y el CHANGELOG).')
+        return
+      }
       // Fallback si no se encuentra ninguna ruta
       mostrarTexto('Página no encontrada (404)')
       return

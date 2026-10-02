@@ -5,8 +5,8 @@
  *
  * Reexporta la API pública; los módulos internos siguen disponibles en su ruta
  * (@core/…, @features/…) para usos avanzados.
- * No incluye generateUrl: vive en routes.config.js (importarlo aquí crearía un ciclo
- * con los guards de la app, que a su vez importan '@kit').
+ * No incluye generateUrl ni la tabla de rutas: viven en routes.config.js, que la app
+ * registra en main.js con registerRoutes(routes).
  */
 
 // Reactividad
@@ -26,8 +26,7 @@ export { define, c, render, renderApp } from '@components/Component.js'
 export { HttpClient } from '@core/httpClient.js'
 export { persist } from '@shared/utils/persist.js'
 
-// Router — AL FINAL a propósito: el router importa routes.config.js, que puede importar
-// guards de la app que a su vez importen '@kit'. Con este orden, cuando se cierra ese
-// ciclo, todo lo anterior (signal, persist…) ya está cargado y se puede usar al instante.
+// Router (desde la v2 no importa routes.config.js: los guards pueden importar '@kit' sin ciclos)
 export { navigate, replace, url, currentPath, currentQuery } from '@features/router/router.state.js'
+export { registerRoutes } from '@features/router/router.utils.js'
 export { Link } from '@features/router/Link.js'

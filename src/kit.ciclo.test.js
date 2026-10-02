@@ -1,12 +1,11 @@
 // @vitest-environment node
 //
-// Protección del ciclo de importación routes.config → guard → '@kit' → router → routes.config.
-// src/kit.js exporta el router AL FINAL para que, cuando se cierra ese ciclo, lo demás
-// (signal, persist…) ya esté cargado. Si alguien reordena kit.js, este test falla.
-//
-// No se puede probar con vi.mock (una factoría asíncrona que importa '@kit' se bloquea),
-// así que se monta un mini-proyecto temporal real con un guard que usa '@kit' al cargarse
-// y se ejecuta Vitest dentro de él, entrando por los tres sitios posibles.
+// Un guard de la app puede importar '@kit' y usarlo AL CARGARSE.
+// Hasta la v1, el router importaba routes.config.js y eso creaba el ciclo
+// routes.config → guard → '@kit' → router → routes.config. Desde la v2 las rutas se
+// registran con registerRoutes(routes) en main.js y el ciclo no existe: este test lo
+// comprueba de verdad, en un mini-proyecto temporal (vi.mock con una factoría asíncrona
+// que importa '@kit' se bloquea), entrando por cuatro sitios, incluido el arranque de main.js.
 import { it, expect } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -52,7 +51,12 @@ import { sesion } from '@features/ciclo/guard.js'`,
 import * as kit from '@kit'
 import { sesion } from '@features/ciclo/guard.js'`,
   'guard-primero': `import { sesion } from '@features/ciclo/guard.js'
-import * as kit from '@kit'`
+import * as kit from '@kit'`,
+  // Como main.js: se importan las rutas (y con ellas el guard) y se registran
+  'como-main': `import * as kit from '@kit'
+import { routes } from '@features/router/routes.config.js'
+import { sesion } from '@features/ciclo/guard.js'
+kit.registerRoutes(routes)`
 }
 
 const testDeEntrada = (imports) => `import { it, expect } from 'vitest'
@@ -61,12 +65,13 @@ ${imports}
 it('el guard carga y la API de @kit está completa', () => {
   expect(sesion.get()).toBeNull()
   expect(typeof kit.navigate).toBe('function')
+  expect(typeof kit.registerRoutes).toBe('function')
 })
 `
 
 const sinColores = (texto) => texto.replace(/\u001b\[[0-9;]*m/g, '')
 
-it("'@kit' tolera que un guard de routes.config importe '@kit' y lo use al cargarse", () => {
+it("un guard de routes.config puede importar '@kit' y usarlo al cargarse (sin ciclo de importación)", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ssk-ciclo-'))
   try {
     // Copia del proyecto sin sus tests (solo los archivos de configuración que existan)
@@ -100,11 +105,11 @@ it("'@kit' tolera que un guard de routes.config importe '@kit' y lo use al carga
     }
     salida = sinColores(salida)
 
-    const ok = /Tests\s+3 passed \(3\)/.test(salida)
+    const ok = /Tests\s+4 passed \(4\)/.test(salida)
     expect(ok, [
-      "El orden de exportación de src/kit.js ya no tolera el ciclo routes.config → guard → '@kit' → router.",
-      'Solución: en src/kit.js, el bloque del router (navigate, replace, url, currentPath, currentQuery, Link)',
-      'debe ir AL FINAL, después de todas las demás exportaciones.',
+      "Un guard que importa '@kit' y lo usa al cargarse ya no funciona: ¿ha vuelto el ciclo de importación?",
+      'Comprueba que src/features/router/router.utils.js NO importe routes.config.js (las rutas se',
+      'registran con registerRoutes(routes) en main.js) y que nada del router importe módulos de la app.',
       '--- salida del proyecto de prueba (últimas 40 líneas) ---',
       salida.trim().split('\n').slice(-40).join('\n')
     ].join('\n')).toBe(true)

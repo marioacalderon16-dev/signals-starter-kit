@@ -15,8 +15,11 @@ import { logger } from './shared/utils/logger.js'
 // 3. Registrar todos los componentes desde el barrel
 import '@components/index.js'
 
-// 4. Importar la función para renderizar
-import { renderApp } from '@components/Component.js'
+// 4. Importar la función para renderizar y registrar las rutas de la app
+import { renderApp, registerRoutes } from '@kit'
+import { routes } from '@features/router/routes.config.js'
+
+registerRoutes(routes) // v2: el router ya no importa routes.config.js por su cuenta
 
 // Actualizar título
 document.title = config.name

@@ -2,11 +2,12 @@ import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { define, c } from './Component.js'
 import { signal, createRoot } from '@core/signal.js'
 import { navigate, currentPath } from '@features/router/router.state.js'
+import { registerRoutes } from '@features/router/router.utils.js'
 
 const sesion = signal(null)
 
-vi.mock('@features/router/routes.config.js', () => ({
-  routes: [
+// Rutas de prueba: desde la v2 se registran con registerRoutes (el router ya no importa routes.config.js)
+const routes = [
     { path: '/', component: 'Inicio', name: 'inicio' },
     { path: '/vieja', redirect: '/nueva' },
     { path: '/usuario/:id', redirect: ({ params }) => `/perfil/${params.id}` },
@@ -22,8 +23,8 @@ vi.mock('@features/router/routes.config.js', () => ({
     { path: '/a-si-misma', component: 'Nueva', name: 'mismo', beforeEnter: () => '/a-si-misma/' },
     { path: '/bucle-a', redirect: '/bucle-b' },
     { path: '/bucle-b', redirect: '/bucle-a' },
-  ]
-}))
+]
+registerRoutes(routes)
 
 const tick = () => new Promise(r => setTimeout(r))
 const settle = async () => { for (let i = 0; i < 15; i++) await tick() }

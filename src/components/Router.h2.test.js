@@ -3,11 +3,12 @@ import { define, c } from './Component.js'
 import { h } from '@features/dom/dom.js'
 import { createRoot } from '@core/signal.js'
 import { navigate } from '@features/router/router.state.js'
+import { registerRoutes } from '@features/router/router.utils.js'
 
 const cargaDiferida = vi.hoisted(() => ({ resolver: null }))
 
-vi.mock('@features/router/routes.config.js', () => ({
-  routes: [
+// Rutas de prueba: desde la v2 se registran con registerRoutes (el router ya no importa routes.config.js)
+const routes = [
     { path: '/', component: 'Inicio' },
     { path: '/acerca', component: 'Acerca', title: 'Acerca de' },
     { path: '/p/:id', component: 'Producto', title: ({ params }) => `Producto ${params.id}`, layout: 'Marco' },
@@ -16,8 +17,8 @@ vi.mock('@features/router/routes.config.js', () => ({
     { path: '/buscar', component: 'Acerca', title: ({ query }) => `Buscar: ${query.q ?? ''}` },
     { path: '/rota', component: 'Rota', title: () => { throw new Error('título roto') } },
     { path: '/diferida', component: 'Diferida', title: 'Diferida', layout: 'Marco', load: () => new Promise(r => { cargaDiferida.resolver = r }) },
-  ]
-}))
+]
+registerRoutes(routes)
 
 const settle = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setTimeout(r)) }
 const p = (name) => () => h('p', {}, `página:${name}`)
@@ -154,7 +155,6 @@ describe('API en inglés (R3)', () => {
   it('el layout recibe content (alias contenido) y se aplica aunque el componente sea el mismo', async () => {
     let props
     define('MarcoIngles', (p) => { props = p; return h('section', {}, p.content) })
-    const { routes } = await import('@features/router/routes.config.js')
     routes.push({ path: '/en', component: 'Acerca', layout: 'MarcoIngles' })
     navigate('/buscar'); await settle() // mismo componente (Acerca) sin layout…
     navigate('/en'); await settle()     // …y ahora con layout: el layout debe aplicarse
