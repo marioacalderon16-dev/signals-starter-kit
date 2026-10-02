@@ -53,6 +53,38 @@ cp .env.example .env
 
 ¿Prefieres tener tu propio repositorio en GitHub desde el principio? Usa el botón **[Use this template](https://github.com/marioacalderon16-dev/signals-starter-kit/generate)** y clona el repo que se crea. Todas las opciones están en [Crea tu proyecto](../README.md#crea-tu-proyecto).
 
+### Guarda tu proyecto en tu GitHub (opcional)
+
+degit copia los archivos **sin historial ni conexión con ningún repositorio**: tu trabajo se queda solo en tu ordenador. No se guarda en el repo de signals-starter-kit (ni podrías: solo su creador tiene permiso de escritura). Para tenerlo en **tu** GitHub:
+
+1. Inicia tu propio historial y haz el primer commit:
+
+   ```bash
+   git init
+   git add .
+   git commit -m "Proyecto inicial desde signals-starter-kit"
+   git branch -M main
+   ```
+
+2. Crea un repositorio **vacío** en https://github.com/new (por ejemplo `mi-app`). No marques las opciones de añadir README, `.gitignore` ni licencia: el proyecto ya los trae.
+
+3. Conéctalo y súbelo (cambia `TU-USUARIO` por tu usuario de GitHub):
+
+   ```bash
+   git remote add origin https://github.com/TU-USUARIO/mi-app.git
+   git push -u origin main
+   ```
+
+A partir de aquí, guarda tu avance al terminar cada paso del tutorial:
+
+```bash
+git add .
+git commit -m "Paso 1: estado de las tareas"
+git push
+```
+
+> Si usaste **Use this template**, tu repo ya está en tu cuenta: salta este apartado y usa directamente `git add`, `git commit` y `git push`.
+
 Arranca el servidor y déjalo corriendo: cada vez que guardes, verás los cambios.
 
 ```bash
