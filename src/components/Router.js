@@ -68,9 +68,16 @@ define('Router', () => {
   // route.title: texto o ({ params, query }) => texto
   const aplicarTitulo = (routeMatch) => {
     const { title } = routeMatch.route
-    const texto = typeof title === 'function'
-      ? untrack(() => title({ params: routeMatch.params, query: currentQuery.get() }))
-      : title
+    let texto = title
+    if (typeof title === 'function') {
+      try {
+        texto = untrack(() => title({ params: routeMatch.params, query: currentQuery.get() }))
+      } catch (error) {
+        // Un título roto no debe impedir mostrar la página
+        log.error(`Error en el title de ${routeMatch.route.path}:`, error)
+        texto = ''
+      }
+    }
     titulo.set(texto ?? '')
     document.title = texto ? `${texto} · ${config.name}` : config.name
   }
@@ -91,9 +98,9 @@ define('Router', () => {
         layoutRenderer = render((props) => c(nombreLayout, props), container, { contenido: slot, title: titulo })
         layoutName = nombreLayout
       }
-    } else if (!nombreLayout) {
-      // Quita el texto 404 / "Cargando…" si lo había
-      container.textContent = ''
+    } else {
+      // Mismo layout (o ninguno): quita el texto 404 / "Cargando…" si lo había
+      ;(slot ?? container).textContent = ''
     }
 
     currentRenderer = render(
@@ -135,7 +142,9 @@ define('Router', () => {
 
   // Si el Router se desmonta, desmonta también la página actual
   onCleanup(() => {
+    navegacion++ // invalida cargas diferidas y transiciones pendientes: no deben montar nada
     if (currentRenderer) currentRenderer.cleanup()
+    currentRenderer = null
     desmontarLayout()
   })
 
@@ -171,7 +180,16 @@ define('Router', () => {
 
     // Carga diferida: route.load() importa el módulo que define el componente (solo la primera vez)
     if (routeMatch.route.load && !getComponent(routeMatch.component)) {
-      mostrarTexto('Cargando…')
+      aplicarTitulo(routeMatch) // el título ya es el de la página que se está cargando
+      if (layoutName && routeMatch.route.layout === layoutName) {
+        // Mismo layout: el aviso va dentro del hueco y el layout (y su estado) se conserva
+        if (currentRenderer) currentRenderer.cleanup()
+        currentRenderer = null
+        currentRoute = null
+        slot.textContent = 'Cargando…'
+      } else {
+        mostrarTexto('Cargando…')
+      }
       routeMatch.route.load()
         .then(() => {
           if (id === navegacion) montar(routeMatch, id) // si ya se navegó a otra ruta, se descarta

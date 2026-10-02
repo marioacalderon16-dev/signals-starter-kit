@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { define, c } from './Component.js'
-import { createRoot } from '@core/signal.js'
+import { createRoot, getStats } from '@core/signal.js'
 import { navigate } from '@features/router/router.state.js'
 
 const defineP = (name) => define(name, () => Object.assign(document.createElement('p'), { textContent: `página:${name}` }))
@@ -18,6 +18,10 @@ vi.mock('@features/router/routes.config.js', () => ({
     {
       path: '/lenta', component: 'Lenta', name: 'lenta',
       load: async () => { await espera(60); defineP('Lenta') }
+    },
+    {
+      path: '/unica', component: 'Unica', name: 'unica',
+      load: async () => { await espera(40); defineP('Unica') }
     },
     {
       path: '/rota', component: 'Rota', name: 'rota',
@@ -69,5 +73,22 @@ describe('Router: rutas con carga diferida (load)', () => {
     navigate('/')
     await espera(0)
     expect(root.textContent).toBe('página:Inicio')
+  })
+})
+
+describe('regresiones R1 (Router.lazy)', () => {
+  it('si el Router se desmonta durante una carga diferida, no monta nada después', async () => {
+    navigate('/')
+    await espera(0)
+    let dispose
+    const otro = document.createElement('div')
+    createRoot(d => { dispose = d; otro.appendChild(c('Router')) })
+    navigate('/unica')                       // empieza a cargar (40 ms; nunca cargada antes)
+    await espera(0)
+    const vivos = getStats().effects
+    dispose()                               // se desmonta antes de que termine
+    await espera(100)
+    expect(otro.textContent).not.toContain('página:Unica')
+    expect(getStats().effects).toBeLessThan(vivos)
   })
 })

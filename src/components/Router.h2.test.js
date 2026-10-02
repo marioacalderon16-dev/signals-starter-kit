@@ -11,6 +11,8 @@ vi.mock('@features/router/routes.config.js', () => ({
     { path: '/p/:id', component: 'Producto', title: ({ params }) => `Producto ${params.id}`, layout: 'Marco' },
     { path: '/lista', component: 'Lista', title: 'Lista', layout: 'Marco' },
     { path: '/rapida', component: 'Rapida', transition: false },
+    { path: '/rota', component: 'Rota', title: () => { throw new Error('título roto') } },
+    { path: '/diferida', component: 'Diferida', title: 'Diferida', layout: 'Marco', load: () => new Promise(r => setTimeout(() => { define('Diferida', () => h('p', {}, 'página:Diferida')); r() }, 30)) },
   ]
 }))
 
@@ -23,6 +25,7 @@ beforeAll(async () => {
   define('Acerca', p('Acerca'))
   define('Lista', p('Lista'))
   define('Rapida', p('Rapida'))
+  define('Rota', p('Rota'))
   define('Producto', ({ params }) => h('p', {}, `producto:${params.id}`))
   define('Marco', ({ contenido, title }) => {
     montajesMarco++
@@ -104,5 +107,29 @@ describe('Router: View Transitions', () => {
     pendientes.forEach(cb => cb())
     await settle()
     expect(root.textContent).toBe('Listapágina:Lista')
+  })
+})
+
+describe('regresiones R1 (Router.h2)', () => {
+  it('un title que lanza no deja la página anterior: se muestra la nueva y se registra el error', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    navigate('/acerca'); await settle()
+    navigate('/rota'); await settle()
+    expect(root.textContent).toBe('página:Rota')
+    expect(document.title).toBe('signals-starter-kit')
+    expect(err).toHaveBeenCalled()
+    err.mockRestore()
+  })
+
+  it('"Cargando…" de una ruta diferida con el mismo layout no desmonta el layout', async () => {
+    navigate('/lista'); await settle()
+    const marco = root.querySelector('.marco')
+    navigate('/diferida'); await settle()
+    expect(root.querySelector('.marco')).toBe(marco)
+    expect(marco.textContent).toBe('DiferidaCargando…') // el título ya es el de la ruta que carga
+    expect(document.title).toBe('Diferida · signals-starter-kit')
+    await new Promise(r => setTimeout(r, 60)); await settle()
+    expect(root.querySelector('.marco')).toBe(marco)
+    expect(marco.textContent).toBe('Diferidapágina:Diferida')
   })
 })
