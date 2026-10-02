@@ -46,6 +46,7 @@ export default defineConfig({
   // · Funciona en JS, TS, CSS, Vue, etc.
   resolve: {
     alias: {
+      '@kit': path.resolve(__dirname, './src/kit.js'), // punto de entrada único: import { … } from '@kit'
       '@': path.resolve(__dirname, './src'),
       '@core': path.resolve(__dirname, './src/core'),
       '@components': path.resolve(__dirname, './src/components'),

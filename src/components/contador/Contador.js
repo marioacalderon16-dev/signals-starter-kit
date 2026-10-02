@@ -4,9 +4,7 @@
  * Componente contador (ejemplo básico)
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
-import { computed } from '@core/signal.js'
+import { define, h, computed } from '@kit'
 
 import { contador, doble, incrementar, decrementar, reiniciar } from '@features/contador/contador.state.js'
 

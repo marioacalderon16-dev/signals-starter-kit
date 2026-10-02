@@ -92,10 +92,11 @@ define('Router', () => {
       desmontarLayout()
       container.textContent = ''
       if (nombreLayout) {
-        // El layout recibe { contenido, title }: un hueco para la página y el título como signal
+        // El layout recibe { content, title }: un hueco para la página y el título como signal
+        // (`contenido` se mantiene como alias por compatibilidad)
         slot = document.createElement('div')
         slot.style.display = 'contents'
-        layoutRenderer = render((props) => c(nombreLayout, props), container, { contenido: slot, title: titulo })
+        layoutRenderer = render((props) => c(nombreLayout, props), container, { content: slot, contenido: slot, title: titulo })
         layoutName = nombreLayout
       }
     } else {
@@ -115,8 +116,9 @@ define('Router', () => {
   const montar = (routeMatch, id) => {
     aplicarTitulo(routeMatch)
 
-    if (currentRoute && currentRoute.component === routeMatch.component) {
-      // Si es el mismo componente, solo actualizamos las props
+    const mismoLayout = (currentRoute?.route.layout ?? null) === (routeMatch.route.layout ?? null)
+    if (currentRoute && currentRoute.component === routeMatch.component && mismoLayout) {
+      // Mismo componente y mismo layout: solo actualizamos las props
       if (currentRenderer) currentRenderer.update({ params: routeMatch.params })
       currentRoute = routeMatch
       return

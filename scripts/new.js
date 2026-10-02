@@ -69,8 +69,7 @@ const plantillaPagina = (Nombre, texto) => `/**
  * Página ${texto}
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h } from '@kit'
 
 define('${Nombre}', ({ params }) =>
   h('main', { className: 'mx-auto max-w-3xl space-y-4 p-6' },
@@ -84,8 +83,7 @@ const plantillaComponente = (Nombre) => `/**
  * Componente ${Nombre}
  */
 
-import { define } from '@components/Component.js'
-import { h } from '@features/dom/dom.js'
+import { define, h } from '@kit'
 
 define('${Nombre}', (props = {}) =>
   h('div', { className: 'rounded-xl bg-white p-4 shadow ring-1 ring-slate-200' },
@@ -95,7 +93,7 @@ define('${Nombre}', (props = {}) =>
 `
 
 const plantillaTestComponente = (Nombre) => `import { describe, it, expect } from 'vitest'
-import { c } from '@components/Component.js'
+import { c } from '@kit'
 import './${Nombre}.js'
 
 describe('${Nombre}', () => {
@@ -110,6 +108,7 @@ const plantillaFeature = (nombre) => `/**
  * Estado y acciones de ${nombre}
  */
 
+// Del núcleo y no de '@kit': un estado puede acabar importado por un guard de routes.config
 import { signal, computed } from '@core/signal.js'
 
 // - Estado -

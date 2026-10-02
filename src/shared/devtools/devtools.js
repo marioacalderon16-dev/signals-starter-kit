@@ -4,6 +4,7 @@
  * Panel de desarrollo: muestra cuántos effects hay vivos y resalta en la página
  * cada nodo que actualiza un signal (la reactividad de grano fino, a la vista).
  * Solo se carga en desarrollo (ver src/main.js). Desactívalo con VITE_DEVTOOLS=false.
+ * API pública: startDevtools() (iniciarDevtools se mantiene como alias).
  */
 
 import { getStats } from '@core/signal.js'
@@ -35,7 +36,7 @@ const CSS = `
  * Monta el panel. No usa signals (se actualiza con un intervalo) para no contarse a sí mismo.
  * @returns {Function} parar: quita el panel y el gancho
  */
-export function iniciarDevtools() {
+export function startDevtools() {
   let resaltar = leerPreferencia()
 
   const estilo = document.createElement('style')
@@ -80,3 +81,6 @@ export function iniciarDevtools() {
     estilo.remove()
   }
 }
+
+// Alias en español (compatibilidad con versiones anteriores)
+export const iniciarDevtools = startDevtools

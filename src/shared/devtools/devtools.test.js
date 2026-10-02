@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { signal, effect, createRoot, getStats } from '@core/signal.js'
 import { h, devtools } from '@features/dom/dom.js'
-import { iniciarDevtools } from './devtools.js'
+import { iniciarDevtools, startDevtools } from './devtools.js'
 
 const tick = () => new Promise(r => setTimeout(r))
 // Con temporizadores falsos: deja correr las microtasks (ahí se ejecutan los effects)
@@ -92,5 +92,11 @@ describe('cobertura R2 (devtools)', () => {
     parar()
     expect(vi.getTimerCount()).toBe(0)
     vi.useRealTimers()
+  })
+})
+
+describe('API en inglés (R3)', () => {
+  it('startDevtools es el nombre público; iniciarDevtools sigue funcionando como alias', () => {
+    expect(startDevtools).toBe(iniciarDevtools)
   })
 })

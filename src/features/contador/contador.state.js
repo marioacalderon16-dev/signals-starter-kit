@@ -4,7 +4,7 @@
  * Ejemplo básico: un signal, un computed y tres acciones
  */
 
-import { signal, computed } from '@core/signal.js'
+import { signal, computed } from '@kit'
 
 // - Estado -
 export const contador = signal(0)

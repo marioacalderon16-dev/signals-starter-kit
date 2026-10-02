@@ -30,9 +30,9 @@ beforeAll(async () => {
   define('Rapida', p('Rapida'))
   define('Rota', p('Rota'))
   define('Producto', ({ params }) => h('p', {}, `producto:${params.id}`))
-  define('Marco', ({ contenido, title }) => {
+  define('Marco', ({ content, title }) => {
     montajesMarco++
-    return h('section', { className: 'marco' }, h('h1', {}, title), contenido)
+    return h('section', { className: 'marco' }, h('h1', {}, title), content)
   })
   await import('./Router.js')
   root = document.createElement('div')
@@ -147,5 +147,19 @@ describe('cobertura R2 (title)', () => {
   it('title puede usar la query', async () => {
     navigate('/buscar?q=phone'); await settle()
     expect(document.title).toBe('Buscar: phone · signals-starter-kit')
+  })
+})
+
+describe('API en inglés (R3)', () => {
+  it('el layout recibe content (alias contenido) y se aplica aunque el componente sea el mismo', async () => {
+    let props
+    define('MarcoIngles', (p) => { props = p; return h('section', {}, p.content) })
+    const { routes } = await import('@features/router/routes.config.js')
+    routes.push({ path: '/en', component: 'Acerca', layout: 'MarcoIngles' })
+    navigate('/buscar'); await settle() // mismo componente (Acerca) sin layout…
+    navigate('/en'); await settle()     // …y ahora con layout: el layout debe aplicarse
+    expect(props.content).toBeInstanceOf(Node)
+    expect(props.contenido).toBe(props.content)
+    expect(root.textContent).toBe('página:Acerca')
   })
 })
