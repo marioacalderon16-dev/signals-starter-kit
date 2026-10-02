@@ -85,7 +85,14 @@ export const h = (tag, attrs = {}, ...children) => {
   const el = document.createElement(tag)
 
   /* 7.c  atributos / props / eventos  */
+  const binds = [] // bind:value / bind:checked se aplican tras los hijos (un <select> necesita sus <option>)
   Object.entries(attrs).forEach(([k, v]) => {
+    /* enlace en los dos sentidos  bind:value  bind:checked  */
+    if (k.startsWith('bind:')) {
+      binds.push([k.slice(5), v])
+      return
+    }
+
     /* eventos  onClick  o  on:click  */
     if (isEventKey(k)) {
       const event = k.startsWith('on:') ? k.slice(3) : k.slice(2).toLowerCase()
@@ -257,7 +264,38 @@ export const h = (tag, attrs = {}, ...children) => {
     }
   }
 
+  binds.forEach(([prop, sig]) => bindTwoWay(el, prop, sig))
+
   return el
+}
+
+/* ----------  7.a  bindTwoWay  –  bind:value / bind:checked  ---------- */
+// El signal actualiza el elemento y el elemento actualiza el signal.
+// Solo escribe en el elemento si el valor difiere (no mueve el cursor al escribir).
+const bindTwoWay = (el, prop, signal) => {
+  if (!isSignal(signal) || typeof signal.set !== 'function') {
+    console.warn(`h(): bind:${prop} necesita un signal (con .set)`)
+    return
+  }
+  if (prop === 'value') {
+    effect(() => {
+      const v = signal.get()
+      const texto = v === null || v === undefined ? '' : String(v)
+      if (el.value !== texto) el.value = texto
+    })
+    el.addEventListener('input', () => signal.set(el.value))
+    if (el.tagName === 'SELECT') el.addEventListener('change', () => signal.set(el.value))
+    return
+  }
+  if (prop === 'checked') {
+    effect(() => {
+      const v = Boolean(signal.get())
+      if (el.checked !== v) el.checked = v
+    })
+    el.addEventListener('change', () => signal.set(el.checked))
+    return
+  }
+  console.warn(`h(): bind:${prop} no está soportado (usa bind:value o bind:checked)`)
 }
 
 /* ----------  7.b  –  texto simple  ---------- */
@@ -339,6 +377,37 @@ export const For = (each, key, render) => {
   })
 
   return fragment
+}
+
+/* ----------  7.d  Show  –  renderizado condicional  ---------- */
+// Show(cond, () => vista, () => alternativa?)
+// - cond: signal/computed o función; se evalúa como verdadero/falso
+// - Solo reconstruye cuando la condición cambia de verdadero a falso (o al revés):
+//   mientras siga siendo verdadera, la vista conserva su nodo y su estado.
+// - Cada rama vive en su propio root: sus effects se liberan al cambiar de rama o al desmontar.
+export const Show = (when, vista, alternativa) => {
+  const leer = typeof when === 'function' ? when : () => when.get()
+  const vacio = () => null
+  let ultimo
+  let nodo = null
+  let dispose = null
+
+  if (getOwner()) onCleanup(() => dispose && dispose())
+
+  return reactiveChild({
+    get: () => {
+      const activo = Boolean(leer())
+      if (activo !== ultimo) {
+        ultimo = activo
+        if (dispose) dispose()
+        nodo = createRoot((d) => {
+          dispose = d
+          return (activo ? vista : alternativa || vacio)()
+        })
+      }
+      return nodo
+    }
+  })
 }
 
 /* ----------  8.  alias JSX  ---------- */
