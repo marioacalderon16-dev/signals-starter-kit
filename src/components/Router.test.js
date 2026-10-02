@@ -18,10 +18,12 @@ describe('Router', () => {
     expect(root.textContent).toContain('Fusagasuga')
   })
 
-  it('la ruta inicial es la presentación y mantiene la demo del clima', () => {
+  it('la ruta inicial es la presentación con las demos del contador y del clima', () => {
     expect(root.querySelector('h1').textContent).toContain('signals-starter-kit')
     expect(root.textContent).toContain('npx degit marioacalderon16-dev/signals-starter-kit mi-app')
-    expect(root.querySelector('button').textContent).toBe('Actualizar') // botón de WeatherCard
+    const botones = [...root.querySelectorAll('button')].map(b => b.textContent)
+    expect(botones).toContain('Actualizar') // demo del clima (WeatherCard)
+    expect(botones).toContain('Reiniciar')  // ejemplo básico (Contador)
   })
 
   it('muestra 404 en una ruta desconocida y lo quita al volver', async () => {

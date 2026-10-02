@@ -59,13 +59,23 @@ define('InitialPage', () => {
         )
       ),
 
-      // - Demo en vivo (ejemplo del clima) -
-      h('section', { className: 'flex flex-col items-center gap-4 border-t border-slate-100 py-12' },
-        h('h2', { className: 'font-semibold text-slate-900' }, 'Demo en vivo'),
-        h('p', { className: 'text-center text-sm text-slate-500' },
-          'La temperatura es un signal y la descripción un computed: pulsa Actualizar.'
-        ),
-        c('WeatherCard')
+      // - Demo en vivo: ejemplo básico (contador) y ejemplo del clima -
+      h('section', { className: 'border-t border-slate-100 py-12' },
+        h('h2', { className: 'text-center font-semibold text-slate-900' }, 'Demo en vivo'),
+        h('div', { className: 'mt-6 flex flex-wrap justify-center gap-8' },
+          h('div', { className: 'flex flex-col items-center gap-3' },
+            c('Contador'),
+            h('p', { className: 'max-w-72 text-center text-sm text-slate-500' },
+              'Básico: el número es un signal y el doble un computed.'
+            )
+          ),
+          h('div', { className: 'flex flex-col items-center gap-3' },
+            c('WeatherCard'),
+            h('p', { className: 'max-w-72 text-center text-sm text-slate-500' },
+              'Asíncrono: la temperatura es un signal y la descripción un computed.'
+            )
+          )
+        )
       )
     ),
 

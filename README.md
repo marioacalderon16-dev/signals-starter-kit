@@ -2,7 +2,7 @@
 
 Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reactivo propio: **signals**, una función `h()` para crear DOM, componentes registrados por nombre y un router basado en la History API. Sin React ni Vue: todo el framework son unos pocos archivos que puedes leer y modificar.
 
-Incluye una demo (tarjeta del clima) y 65 tests.
+Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima) y 68 tests.
 
 👉 **¿Empiezas?** Sigue el [tutorial de inicio rápido](docs/QUICKSTART.md): construyes una lista de tareas paso a paso en unos 20 minutos.
 
@@ -94,11 +94,13 @@ src/
 │   ├── App.js, Router.js    # Componente raíz y router
 │   ├── index.js             # Autoregistra los componentes de todas las subcarpetas
 │   ├── pages/               # Páginas (una por ruta)
-│   └── weather/             # Componentes de la demo
+│   ├── contador/            # Ejemplo básico: contador
+│   └── weather/             # Ejemplo: tarjeta del clima
 ├── features/
 │   ├── dom/dom.js           # h(), fragment, bindings reactivos
 │   ├── router/              # Estado, utilidades y tabla de rutas
-│   └── weather/             # Estado de la demo
+│   ├── contador/            # Estado del contador
+│   └── weather/             # Estado del clima
 └── shared/utils/            # logger, persist (signals en localStorage)
 ```
 
