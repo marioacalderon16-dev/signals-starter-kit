@@ -441,8 +441,8 @@ El servicio **normaliza** la respuesta: la app trabaja con `{ token, expiraEn, u
  * Productos (DummyJSON). Nota: PUT y DELETE son simulados por la API, no persisten.
  */
 
+import { buildQueryString } from '@kit'
 import { api } from './api.js'
-import { buildQueryString } from '@features/router/router.utils.js'
 
 export const POR_PAGINA = 10
 const CAMPOS = 'title,price,stock,category,thumbnail'
@@ -576,8 +576,7 @@ Sustituye `ProductosPage.lazy.js` por la versión final:
  * Es *.lazy.js: se descarga la primera vez que se visita la ruta.
  */
 
-import { define, h, signal, computed, untrack, resource, For, Show, Link, navigate, currentQuery } from '@kit'
-import { buildQueryString } from '@features/router/router.utils.js'
+import { define, h, signal, computed, untrack, resource, For, Show, Link, navigate, currentQuery, buildQueryString } from '@kit'
 import * as productosService from '@/services/productos.service.js'
 
 const precio = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' })
@@ -623,7 +622,7 @@ define('ProductosPage', () => {
     onSubmit: (event) => {
       event.preventDefault()
       const texto = busqueda.get().trim()
-      navigate(rutaListado(texto ? { q: texto } : {}))
+      navigate(rutaListado({ q: texto })) // buildQueryString omite q si está vacío
     }
   },
     h('input', { type: 'search', placeholder: 'Buscar productos…', className: 'flex-1 rounded-lg border-slate-300', 'bind:value': busqueda }),
@@ -653,7 +652,7 @@ define('ProductosPage', () => {
   )
 
   const enlace = (texto, numero) =>
-    Link({ to: rutaListado({ ...(q.get() && { q: q.get() }), pagina: numero }), className: 'text-sky-700 hover:underline' }, texto)
+    Link({ to: rutaListado({ q: q.get(), pagina: numero }), className: 'text-sky-700 hover:underline' }, texto)
 
   return h('div', { className: 'space-y-4' },
     buscador,
@@ -696,8 +695,7 @@ Sustituye `ProductoEditarPage.lazy.js` por la versión final:
  * Página /admin/productos/:id: formulario con validación en vivo
  */
 
-import { define, h, signal, computed, resource, Show, Link, navigate } from '@kit'
-import { buildQueryString } from '@features/router/router.utils.js'
+import { define, h, signal, computed, resource, Show, Link, navigate, buildQueryString } from '@kit'
 import * as productosService from '@/services/productos.service.js'
 
 const formulario = (producto) => {

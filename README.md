@@ -2,9 +2,9 @@
 
 Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reactivo propio: **signals**, una función `h()` para crear DOM, componentes registrados por nombre y un router basado en la History API. Sin React ni Vue: todo el framework son unos pocos archivos que puedes leer y modificar.
 
-> **Versión 2.0.** Si vienes de la 1.x, la migración es una línea en `main.js`: mira el [CHANGELOG](CHANGELOG.md). La 1.x sigue disponible con la etiqueta `v1.0.0`.
+> **Versión 2.1.** Novedades: `debounced` y `setQuery` (ver el [CHANGELOG](CHANGELOG.md)). Si vienes de la 1.x, la migración es una línea en `main.js`. La 1.x sigue disponible con la etiqueta `v1.0.0`.
 
-Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima) y 68 tests.
+Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima), más los tests del kit (`npm test`).
 
 👉 **¿Empiezas?** Sigue el [tutorial de inicio rápido](docs/QUICKSTART.md): construyes una lista de tareas paso a paso en unos 20 minutos. ¿Quieres ver de qué es capaz? Mira las [recetas](docs/RECETAS.md): siete ejemplos cortos, de un formulario con validación a datos de una API o un tema oscuro. Y cuando quieras algo de nivel profesional, el [tutorial del panel de administración](docs/TUTORIAL-PANEL.md) cubre login, rutas protegidas, CRUD, tests, CI y despliegue en GitHub Pages.
 
