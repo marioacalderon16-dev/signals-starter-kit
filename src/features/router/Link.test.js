@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { Link } from './Link.js'
 import { navigate } from './router.state.js'
-import { createRoot } from '@core/signal.js'
+import { createRoot, signal, computed } from '@core/signal.js'
 import { registerRoutes } from './router.utils.js'
 
 const cargarAdmin = vi.hoisted(() => vi.fn(() => Promise.resolve()))
@@ -99,4 +99,64 @@ describe('cobertura R2 (Link)', () => {
     a.dispatchEvent(new Event('mouseenter'))
     expect(cargarAdmin).toHaveBeenCalledTimes(2)
   })
+
+  it('to como signal: cambia el href y el estado activo sin reconstruir el enlace', async () => {
+    navigate('/acerca')
+    const to = signal('/acerca')
+    const a = montar(() => Link({ to, activeClass: 'font-bold' }, 'Ir'))
+    expect(a.getAttribute('href')).toBe('/acerca')
+    expect(a.classList.contains('font-bold')).toBe(true)
+    to.set('/admin')
+    await tick()
+    expect(document.body.firstChild).toBe(a)
+    expect(a.getAttribute('href')).toBe('/admin')
+    expect(a.classList.contains('font-bold')).toBe(false)
+    expect(a.hasAttribute('aria-current')).toBe(false)
+  })
+
+  it('to como función: el href sigue al destino actual', async () => {
+    navigate('/')
+    const id = signal('usuarios')
+    const a = montar(() => Link({ to: () => `/admin/${id.get()}` }, 'Ir'))
+    id.set('otros')
+    await tick()
+    expect(a.getAttribute('href')).toBe('/admin/otros')
+  })
+
+  it('className como signal se combina con activeClass', async () => {
+    navigate('/acerca')
+    const clase = signal('text-sm')
+    const a = montar(() => Link({ to: '/acerca', className: clase, activeClass: 'font-bold' }, 'Acerca'))
+    expect(a.className).toBe('text-sm font-bold')
+    clase.set('text-lg')
+    await tick()
+    expect(a.className).toBe('text-lg font-bold')
+    navigate('/')
+    await tick()
+    expect(a.className).toBe('text-lg')
+  })
+
+  it('className como computed o función también funciona', async () => {
+    const grande = signal(false)
+    const a = montar(() => Link({ to: '/acerca', className: computed(() => (grande.get() ? 'text-lg' : 'text-sm')) }, 'A'))
+    const b = montar(() => Link({ to: '/acerca', className: () => (grande.get() ? 'p-4' : 'p-2') }, 'B'))
+    grande.set(true)
+    await tick()
+    expect(a.className).toBe('text-lg')
+    expect(b.className).toBe('p-4')
+  })
+
+  it('prefetch con to reactivo: precarga el destino actual, una vez por destino', async () => {
+    cargarAdmin.mockClear()
+    const to = signal('/acerca')
+    const a = montar(() => Link({ to, prefetch: true }, 'Ir'))
+    a.dispatchEvent(new Event('mouseenter'))
+    expect(cargarAdmin).not.toHaveBeenCalled()   // /acerca no es diferida
+    to.set('/admin')
+    await tick()
+    a.dispatchEvent(new Event('mouseenter'))
+    a.dispatchEvent(new Event('focus'))
+    expect(cargarAdmin).toHaveBeenCalledTimes(1)
+  })
 })
+

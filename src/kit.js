@@ -18,7 +18,7 @@ export { resource } from '@core/resource.js'
 export { debounced } from '@core/debounced.js'
 
 // DOM
-export { h, For, Show, fragment, text } from '@features/dom/dom.js'
+export { h, For, Show, Dynamic, fragment, text } from '@features/dom/dom.js'
 
 // Componentes
 export { define, c, render, renderApp } from '@components/Component.js'

@@ -2,7 +2,7 @@
 
 Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reactivo propio: **signals**, una función `h()` para crear DOM, componentes registrados por nombre y un router basado en la History API. Sin React ni Vue: todo el framework son unos pocos archivos que puedes leer y modificar.
 
-> **Versión 2.1.** Novedades: `debounced` y `setQuery` (ver el [CHANGELOG](CHANGELOG.md)). Si vienes de la 1.x, la migración es una línea en `main.js`. La 1.x sigue disponible con la etiqueta `v1.0.0`.
+> **Versión 2.2.** Novedades: función como hijo de `h()` (`Dynamic`), `Show` con valor y `keyed`, `Link` reactivo y SVG en `h()` (ver el [CHANGELOG](CHANGELOG.md)). Si vienes de la 1.x, la migración es una línea en `main.js`. La 1.x sigue disponible con la etiqueta `v1.0.0`.
 
 Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima), más los tests del kit (`npm test`).
 
@@ -233,6 +233,30 @@ Show(() => carrito.get().length > 0, () => h('ul', {}, '…'), () => h('p', {}, 
 
 - La condición es un signal, un `computed` o una función. La segunda vista es opcional.
 - Solo reconstruye cuando la condición pasa de verdadera a falsa (o al revés). Mientras siga siendo verdadera, la vista conserva su nodo y su estado, y sus effects se liberan al ocultarse.
+- La vista recibe una función que lee el valor actual: úsala dentro de un `computed` para que se mantenga al día sin reconstruir.
+
+```js
+Show(usuario, (u) => h('h1', {}, computed(() => u().nombre)))
+```
+
+- Con `{ keyed: true }` reconstruye cada vez que llega otro valor (otro objeto tras un `mutate`, otro id…) y la vista lo recibe directo. Pierde el foco y lo escrito en sus inputs: para formularios, el modo por defecto.
+
+```js
+Show(detalle, (u) => TarjetaUsuario(u), () => h('p', {}, 'Cargando…'), { keyed: true })
+```
+
+#### Vista que se rehace: función como hijo (`Dynamic`)
+
+```js
+import { h, Dynamic } from '@kit'
+
+h('section', {}, () => TarjetaUsuario(usuario.get()))   // función como hijo
+Dynamic(() => TarjetaUsuario(usuario.get()))             // lo mismo, suelto
+```
+
+- La vista se vuelve a construir cuando cambia algún signal que lee al construirse.
+- Los effects que crea (y sus `onCleanup`) se liberan antes de cada reconstrucción y al desmontar.
+- Prefiere esto a `computed(() => h(...))` como hijo: los effects de un `computed` son de quien lo lea primero, y si lo lee un handler quedan vivos para siempre.
 
 #### Formularios: `bind:value` y `bind:checked`
 
@@ -247,6 +271,17 @@ h('select', { 'bind:value': pais }, h('option', { value: 'es' }, 'España'))
 
 - Enlace en los dos sentidos: al escribir se actualiza el signal; al cambiar el signal se actualiza el campo. Funciona en `input`, `textarea` y `select`.
 - Solo reescribe el campo si el valor es distinto, así que no mueve el cursor mientras escribes.
+
+#### Íconos y gráficos: SVG con `h()`
+
+```js
+const Icono = ({ d, className = 'h-6 w-6' }) =>
+  h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, className },
+    h('path', { d, 'stroke-linecap': 'round' }))
+```
+
+- `svg`, `path`, `circle`, `g`, `rect`, `line`, `text`, `use`… se crean como SVG. Las etiquetas que también existen en HTML (`a`, `title`, `style`) llevan prefijo: `h('svg:title', {}, 'Cerrar')`. Cualquier otra etiqueta SVG también se puede pedir con `svg:`.
+- En SVG todos los atributos van tal cual (`viewBox`, `stroke-width`, `href`), también como signal. `className` funciona igual que en HTML (texto, objeto, array o signal).
 
 ### Componentes
 
@@ -334,6 +369,11 @@ h(Link, { to: '/acerca', className: 'text-sm' }, 'Acerca')
 - Genera un `<a>` con la base de despliegue en el `href`; el clic navega sin recargar.
 - `activeClass` se aplica cuando la ruta actual es `to` o cuelga de ella (`/admin` está activo en `/admin/usuarios`). Con `exact: true`, solo si coincide; `'/'` es exacto por defecto. La página exacta lleva además `aria-current="page"`.
 - `prefetch: true` descarga la página diferida (`load`) al pasar el ratón o enfocar el enlace: al hacer clic ya está lista.
+- `to` y `className` aceptan un valor, un signal/`computed` o una función: el enlace se actualiza sin reconstruirse (no hace falta envolverlo en un `computed`).
+
+```js
+Link({ to: () => `/usuarios/${id.get()}`, className: computed(() => (activo.get() ? 'font-bold' : '')) }, 'Ver')
+```
 
 #### Título y layout por ruta
 

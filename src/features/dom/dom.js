@@ -160,13 +160,31 @@ export const bind = (el, bindings) => {
   return el
 }
 
+/* ----------  6.b  SVG  ---------- */
+// h() crea los hijos antes que el padre: un <path> no sabe que irá dentro de un <svg>.
+// Por eso el espacio de nombres se decide por la etiqueta. Las que existen también en
+// HTML (a, title, style, script) o no están en la lista se piden con prefijo: 'svg:a'.
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const SVG_TAGS = new Set([
+  'svg', 'g', 'path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon',
+  'defs', 'use', 'symbol', 'clipPath', 'mask', 'pattern', 'marker', 'image',
+  'linearGradient', 'radialGradient', 'stop', 'text', 'tspan', 'textPath', 'foreignObject'
+])
+const crearElemento = (tag) => {
+  if (tag.startsWith('svg:')) return document.createElementNS(SVG_NS, tag.slice(4))
+  return SVG_TAGS.has(tag) ? document.createElementNS(SVG_NS, tag) : document.createElement(tag)
+}
+
 /* ----------  7.  h  –  factory de elementos / componentes  ---------- */
 export const h = (tag, attrs = {}, ...children) => {
   /* 7.a  componente función  */
   if (typeof tag === 'function') return tag({ ...attrs, children })
 
-  /* 7.b  elemento normal  */
-  const el = document.createElement(tag)
+  /* 7.b  elemento normal (o SVG)  */
+  const el = crearElemento(tag)
+  // En SVG, className es de solo lectura y casi todo son atributos (viewBox, fill, href…)
+  const esSvg = el.namespaceURI === SVG_NS
+  const ponerClase = esSvg ? (v) => el.setAttribute('class', v) : (v) => { el.className = v }
 
   /* 7.c  atributos / props / eventos  */
   const binds = [] // bind:value / bind:checked se aplican tras los hijos (un <select> necesita sus <option>)
@@ -223,40 +241,40 @@ export const h = (tag, attrs = {}, ...children) => {
     ]
     
     const specialProperties = ['className', 'style', 'htmlFor']
+    // En SVG todo es atributo salvo textContent (válido en cualquier nodo, p. ej. <text>)
+    const esPropiedad = esSvg ? k === 'textContent' : domProperties.includes(k)
     
     /* className  –  array | objeto | string | signal  */
     if (k === 'className' || k === 'class') {
-      const propName = 'className'
-      
-      if (isSignal(v)) { 
-        bindProp(el, propName, v) 
-        return 
+      if (isSignal(v)) {
+        enlazar(el, () => ponerClase(v.get() ?? ''))
+        return
       }
       
       if (Array.isArray(v)) {
         const base = v.filter(x => typeof x === 'string')
         const sig  = v.find(isSignal)
         const apply = () => {
-          el[propName] = base.concat(sig ? sig.get() : []).join(' ')
+          ponerClase(base.concat(sig ? sig.get() : []).join(' '))
         }
         enlazar(el, apply) 
         return
       }
       
-      if (typeof v === 'object' && !Array.isArray(v)) {
+      if (v && typeof v === 'object') {
         const keys = Object.keys(v)
         const apply = () => {
           const list = keys.filter(cls => {
             const cond = v[cls]
             return isSignal(cond) ? cond.get() : Boolean(cond)
           })
-          el[propName] = list.join(' ')
+          ponerClase(list.join(' '))
         }
         enlazar(el, apply) 
         return
       }
       
-      el[propName] = v || ''
+      ponerClase(v || '')
       return
     }
 
@@ -297,7 +315,7 @@ export const h = (tag, attrs = {}, ...children) => {
       if (v == null) return // Ignorar null/undefined
       
       // Propiedades DOM directas
-      if (domProperties.includes(k)) {
+      if (esPropiedad) {
         el[k] = v
       }
       // className ya se manejó arriba
@@ -313,7 +331,7 @@ export const h = (tag, attrs = {}, ...children) => {
 
     /* VALORES COMO SEÑALES */
     // Propiedades DOM como señales (incluye textContent)
-    if (domProperties.includes(k)) {
+    if (esPropiedad) {
       bindProp(el, k, v)
     }
     // Atributos normales como señales
@@ -337,7 +355,9 @@ export const h = (tag, attrs = {}, ...children) => {
       children.flat(Infinity).forEach(ch => {
         if (isEmptyChild(ch)) return
         
-        if (isSignal(ch)) {
+        if (typeof ch === 'function') {
+          el.appendChild(Dynamic(ch))
+        } else if (isSignal(ch)) {
           el.appendChild(reactiveChild(ch))
         } else {
           el.appendChild(
@@ -509,15 +529,21 @@ export const For = (each, key, render) => {
 }
 
 /* ----------  7.d  Show  –  renderizado condicional  ---------- */
-// Show(cond, () => vista, () => alternativa?)
+// Show(cond, (valor) => vista, () => alternativa?, { keyed? })
 // - cond: signal/computed o función; se evalúa como verdadero/falso
-// - Solo reconstruye cuando la condición cambia de verdadero a falso (o al revés):
-//   mientras siga siendo verdadera, la vista conserva su nodo y su estado.
+// - Por defecto solo reconstruye cuando la condición cambia de verdadero a falso (o al
+//   revés): mientras siga siendo verdadera, la vista conserva su nodo y su estado.
+//   La vista recibe una función que lee el valor actual:  (u) => computed(() => u().nombre)
+// - keyed: true reconstruye cada vez que cambia el valor (otro objeto, otro número…)
+//   y la vista lo recibe directo:  (u) => h('h1', {}, u.nombre). Pierde el foco y lo
+//   escrito en los inputs de la vista: para formularios, el modo por defecto.
 // - Cada rama vive en su propio root: sus effects se liberan al cambiar de rama o al desmontar.
-export const Show = (when, vista, alternativa) => {
+export const Show = (when, vista, alternativa, { keyed = false } = {}) => {
   const leer = typeof when === 'function' ? when : () => when.get()
   const vacio = () => null
+  const valorActual = () => leer()
   let ultimo
+  let iniciado = false
   let nodo = null
   let dispose = null
 
@@ -525,19 +551,34 @@ export const Show = (when, vista, alternativa) => {
 
   return reactiveChild({
     get: () => {
-      const activo = Boolean(leer())
-      if (activo !== ultimo) {
-        ultimo = activo
+      const valor = leer()
+      const activo = Boolean(valor)
+      // Sin keyed solo importa si es verdadero; con keyed, el valor (todos los falsos son iguales)
+      const clave = keyed && activo ? valor : activo
+      if (!iniciado || !Object.is(clave, ultimo)) {
+        iniciado = true
+        ultimo = clave
         if (dispose) dispose()
         nodo = createRoot((d) => {
           dispose = d
-          return (activo ? vista : alternativa || vacio)()
+          if (!activo) return (alternativa || vacio)()
+          return vista(keyed ? valor : valorActual)
         })
       }
       return nodo
     }
   })
 }
+
+/* ----------  7.e  Dynamic  –  vista reactiva  ---------- */
+// Dynamic(() => vista)  o, como hijo de h(),  h('div', {}, () => vista)
+// - Vuelve a pintar la vista cuando cambia algún signal que lee al construirse.
+// - fn corre dentro del effect del hijo reactivo: ese effect es el dueño de lo que crea
+//   la vista (effects, For, Show, onCleanup) y lo libera antes de cada nueva ejecución
+//   y al desmontar.
+// - Un computed como hijo no lo garantiza: sus effects son de quien lo lea primero
+//   (si es un handler, quedan sin dueño y no se liberan nunca).
+export const Dynamic = fn => reactiveChild({ get: fn })
 
 /* ----------  8.  alias JSX  ---------- */
 export const jsx = h

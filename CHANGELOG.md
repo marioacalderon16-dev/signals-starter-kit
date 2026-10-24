@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0
+
+Cuatro mejoras que quitan rodeos habituales. Todas son compatibles: actualizar no requiere tocar nada.
+
+### Añadido
+
+- **Función como hijo de `h()`** y **`Dynamic(fn)`** (en `'@kit'`): `h('div', {}, () => Vista(datos.get()))` rehace la vista cuando cambia lo que lee y libera sus effects y `onCleanup` en cada cambio y al desmontar. Recomendado en lugar de `computed(() => h(...))` como hijo: los effects de un `computed` son de quien lo lea primero, y si lo lee un handler quedan vivos para siempre. Ver "Vista que se rehace" en el README.
+- **`Show` pasa el valor a la vista**: `Show(usuario, (u) => …)` recibe una función que lee el valor actual. Nueva opción **`{ keyed: true }`**: reconstruye cuando llega otro valor (otro objeto, otro id) y la vista lo recibe directo. Ver "Mostrar u ocultar" en el README.
+- **`Link` con `to` y `className` reactivos**: aceptan un valor, un signal/`computed` o una función; el enlace se actualiza sin reconstruirse. La precarga (`prefetch`) va ahora una vez por destino.
+- **SVG en `h()`**: `svg`, `path`, `circle`, `g`, `text`, `use`… se crean como SVG; las etiquetas compartidas con HTML se piden con prefijo (`'svg:a'`, `'svg:title'`). `className` va al atributo `class` y el resto son atributos (`viewBox`, `stroke-width`…). Ver "Íconos y gráficos" en el README.
+
+### Cambiado
+
+- Una función como hijo de `h()` antes se pintaba como el texto de su código; ahora es una vista reactiva.
+- Un `className` reactivo con valor `null` o `undefined` deja la clase vacía (antes escribía `"null"` o `"undefined"`).
+
 ## 2.1.0
 
 Funciones nuevas y un ajuste de comportamiento en `buildQueryString` (ver "Cambiado"). Para la mayoría de proyectos, actualizar no requiere tocar nada.
