@@ -1,5 +1,11 @@
 # Changelog
 
+## Sin publicar
+
+### Añadido
+
+- **`on(target, evento, handler, opciones?)`** (en `'@kit'`): escucha eventos de `document`, `window` o cualquier otro objetivo y quita el listener solo al desmontar. Ver "Eventos de document o window" en el README.
+
 ## 2.2.0
 
 Cuatro mejoras que quitan rodeos habituales. Todas son compatibles: actualizar no requiere tocar nada.

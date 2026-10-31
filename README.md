@@ -189,6 +189,23 @@ const libros = resource(
 - Empieza con el valor actual de la fuente (sin esperar). La fuente puede ser un signal, un computed o una función.
 - El temporizador pendiente se cancela al desmontar: créalo dentro de un componente o de un `createRoot`.
 
+#### Eventos de document o window: `on`
+
+```js
+import { define, h, signal, on } from '@kit'
+
+define('Menu', () => {
+  const abierto = signal(false)
+  on(document, 'keydown', (e) => { if (e.key === 'Escape') abierto.set(false) })
+  return h('nav', {}, /* … */)
+})
+```
+
+- El listener se quita solo al desmontar: úsalo dentro de un componente, un effect o un `createRoot`.
+- Acepta las opciones de `addEventListener`: `on(window, 'resize', medir, { passive: true })`.
+- Devuelve una función para quitarlo antes de tiempo.
+- En los elementos creados con `h()` basta con sus props (`onClick`).
+
 ### Crear DOM con `h()`
 
 ```js

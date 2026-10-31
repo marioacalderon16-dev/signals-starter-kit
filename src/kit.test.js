@@ -3,6 +3,7 @@ import * as kit from '@kit'
 import * as signal from '@core/signal.js'
 import { resource } from '@core/resource.js'
 import { debounced } from '@core/debounced.js'
+import { on } from '@core/on.js'
 import { HttpClient } from '@core/httpClient.js'
 import * as dom from '@features/dom/dom.js'
 import * as componentes from '@components/Component.js'
@@ -17,7 +18,7 @@ describe("punto de entrada único '@kit'", () => {
       signal: signal.signal, computed: signal.computed, effect: signal.effect, untrack: signal.untrack,
       createRoot: signal.createRoot, onCleanup: signal.onCleanup, getOwner: signal.getOwner,
       getStats: signal.getStats, Batch: signal.Batch,
-      resource, debounced, HttpClient, persist,
+      resource, debounced, on, HttpClient, persist,
       h: dom.h, For: dom.For, Show: dom.Show, fragment: dom.fragment, text: dom.text,
       define: componentes.define, c: componentes.c, render: componentes.render, renderApp: componentes.renderApp,
       Link, navigate: router.navigate, replace: router.replace, url: router.url,

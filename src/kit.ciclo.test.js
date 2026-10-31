@@ -18,7 +18,7 @@ const VITEST = path.join(RAIZ, 'node_modules/vitest/vitest.mjs')
 // Exportaciones de '@kit' que NO son del router: deben estar listas al cerrarse el ciclo
 const NO_ROUTER = [
   'signal', 'computed', 'effect', 'untrack', 'Batch', 'createRoot', 'onCleanup', 'getOwner', 'getStats',
-  'resource', 'h', 'For', 'Show', 'fragment', 'text', 'define', 'c', 'render', 'renderApp', 'HttpClient', 'persist'
+  'resource', 'on', 'h', 'For', 'Show', 'fragment', 'text', 'define', 'c', 'render', 'renderApp', 'HttpClient', 'persist'
 ]
 
 // Guard de la app que importa '@kit' y lo USA AL CARGARSE (el caso que rompe el orden)

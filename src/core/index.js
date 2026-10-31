@@ -21,3 +21,4 @@ export {
 
 export { resource } from './resource.js'
 export { debounced } from './debounced.js'
+export { on } from './on.js'

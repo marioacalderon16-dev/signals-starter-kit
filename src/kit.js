@@ -16,6 +16,7 @@ export {
 } from '@core/signal.js'
 export { resource } from '@core/resource.js'
 export { debounced } from '@core/debounced.js'
+export { on } from '@core/on.js'
 
 // DOM
 export { h, For, Show, Dynamic, fragment, text } from '@features/dom/dom.js'
