@@ -1,6 +1,8 @@
 # Changelog
 
-## Sin publicar
+## 2.3.0
+
+Un helper nuevo para eventos globales. Es compatible: actualizar no requiere tocar nada.
 
 ### Añadido
 
