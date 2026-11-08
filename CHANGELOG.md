@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.3.1
+
+Corrección de rendimiento. Es compatible: actualizar no requiere tocar nada.
+
+### Corregido
+
+- **`computed` solo avisa si su valor cambia**: si una fuente cambia pero el `computed` da el mismo resultado, ya no vuelve a correr los effects ni los `computed` que dependen de él. Antes, en una lista donde cada fila lee la misma señal (por ejemplo, estrellas de favoritos), se actualizaban todas las filas en vez de solo la afectada.
+
 ## 2.3.0
 
 Un helper nuevo para eventos globales. Es compatible: actualizar no requiere tocar nada.
