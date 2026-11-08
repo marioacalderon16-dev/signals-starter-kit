@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { signal, computed, effect, createRoot, onCleanup } from './signal.js'
+import { signal, computed, effect, createRoot, onCleanup, getOwner, runWithOwner } from './signal.js'
 
 const tick = () => new Promise(r => setTimeout(r))
 
@@ -69,5 +69,29 @@ describe('ownership (F2)', () => {
     expect(() => onCleanup(() => {})).not.toThrow()
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+})
+
+describe('runWithOwner', () => {
+  it('crea effects bajo un dueño guardado y se liberan con él', async () => {
+    const s = signal(0)
+    const seen = []
+    let owner, dispose
+    createRoot(d => { dispose = d; owner = getOwner() })
+    runWithOwner(owner, () => effect(() => { seen.push(s.get()) }))
+    s.set(1); await tick()
+    expect(seen).toEqual([0, 1])
+    dispose()
+    s.set(2); await tick()
+    expect(seen).toEqual([0, 1])
+    expect(s.subs.size).toBe(0)
+  })
+
+  it('no ejecuta fn si el dueño ya se destruyó', () => {
+    let owner
+    createRoot(d => { owner = getOwner(); d() })
+    const fn = vi.fn()
+    expect(runWithOwner(owner, fn)).toBeUndefined()
+    expect(fn).not.toHaveBeenCalled()
   })
 })

@@ -12,14 +12,14 @@
 // Reactividad
 export {
   signal, computed, effect, untrack, Batch,
-  createRoot, onCleanup, getOwner, getStats
+  createRoot, onCleanup, getOwner, runWithOwner, getStats
 } from '@core/signal.js'
 export { resource } from '@core/resource.js'
 export { debounced } from '@core/debounced.js'
 export { on } from '@core/on.js'
 
 // DOM
-export { h, For, Show, Dynamic, fragment, text } from '@features/dom/dom.js'
+export { h, For, Show, Dynamic, fragment, text, bindProp, bindAttr } from '@features/dom/dom.js'
 
 // Componentes
 export { define, c, render, renderApp } from '@components/Component.js'
@@ -29,6 +29,6 @@ export { HttpClient } from '@core/httpClient.js'
 export { persist } from '@shared/utils/persist.js'
 
 // Router (desde la v2 no importa routes.config.js: los guards pueden importar '@kit' sin ciclos)
-export { navigate, replace, setQuery, url, currentPath, currentQuery } from '@features/router/router.state.js'
-export { registerRoutes, buildQueryString } from '@features/router/router.utils.js'
+export { navigate, replace, setQuery, goBack, goForward, url, currentPath, currentQuery } from '@features/router/router.state.js'
+export { registerRoutes, matchRoute, buildQueryString } from '@features/router/router.utils.js'
 export { Link } from '@features/router/Link.js'

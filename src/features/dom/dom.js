@@ -381,6 +381,15 @@ const bindTwoWay = (el, prop, signal) => {
     console.warn(`h(): bind:${prop} necesita un signal (con .set)`)
     return
   }
+  if (prop === 'value' && el.tagName === 'INPUT' && el.type === 'radio') {
+    // Grupo de radios: todos con el mismo signal; queda marcado el que tiene su value
+    effect(() => {
+      const v = el.value === String(signal.get())
+      if (el.checked !== v) el.checked = v
+    })
+    el.addEventListener('change', () => { if (el.checked) signal.set(el.value) })
+    return
+  }
   if (prop === 'value') {
     // <input type="number|range">: el signal recibe un número (vacío o inválido → null)
     const numerico = el.tagName === 'INPUT' && (el.type === 'number' || el.type === 'range')

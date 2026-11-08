@@ -334,6 +334,26 @@ export const getStats = () => ({ effects: efectosVivos })
 export const getOwner = () => currentOwner
 
 /**
+ * Ejecuta fn bajo un dueño guardado con getOwner(), sin tracking: los effects y onCleanup
+ * creados dentro se liberan con ese dueño. Útil en callbacks asíncronos (then, setTimeout).
+ * Si el dueño ya se destruyó, no ejecuta fn (lo creado no se liberaría nunca).
+ * @returns el valor devuelto por fn, o undefined si el dueño ya no existe
+ */
+export const runWithOwner = (owner, fn) => {
+  if (owner?.disposed) return undefined
+  const prevListener = Signal.current
+  const prevOwner = currentOwner
+  Signal.current = null
+  currentOwner = owner
+  try {
+    return fn()
+  } finally {
+    Signal.current = prevListener
+    currentOwner = prevOwner
+  }
+}
+
+/**
  * Registra una limpieza en el dueño actual (effect o root).
  * Corre cuando el dueño se re-ejecuta o se destruye.
  */

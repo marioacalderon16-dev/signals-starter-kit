@@ -30,3 +30,10 @@ describe("punto de entrada único '@kit'", () => {
     }
   })
 })
+
+it("'@kit' exporta los helpers añadidos en la 2.4.0", async () => {
+  const kit = await import('@kit')
+  for (const n of ['bindProp', 'bindAttr', 'goBack', 'goForward', 'matchRoute', 'runWithOwner']) {
+    expect(typeof kit[n]).toBe('function')
+  }
+})

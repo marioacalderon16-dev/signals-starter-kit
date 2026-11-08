@@ -261,3 +261,20 @@ describe('cobertura R2 (reactiveChild)', () => {
     expect(cambios).toEqual([])
   })
 })
+
+describe('bind:value en un grupo de radios', () => {
+  it('marca el radio del valor actual y escribe el value del marcado', async () => {
+    const talla = signal('m')
+    const { el, dispose } = montar(() => h('div', {},
+      ...['s', 'm', 'l'].map(v => h('input', { type: 'radio', name: 'talla', value: v, 'bind:value': talla }))
+    ))
+    const [s, m, l] = el.querySelectorAll('input')
+    expect([s.checked, m.checked, l.checked]).toEqual([false, true, false])
+    l.checked = true
+    l.dispatchEvent(new Event('change'))
+    expect(talla.get()).toBe('l')
+    talla.set('s'); await tick()
+    expect([s.checked, m.checked, l.checked]).toEqual([true, false, false])
+    dispose()
+  })
+})

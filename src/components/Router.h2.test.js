@@ -4,6 +4,7 @@ import { h } from '@features/dom/dom.js'
 import { createRoot } from '@core/signal.js'
 import { navigate, setQuery } from '@features/router/router.state.js'
 import { registerRoutes } from '@features/router/router.utils.js'
+import config from '@/config/app.js'
 
 const cargaDiferida = vi.hoisted(() => ({ resolver: null }))
 
@@ -47,11 +48,11 @@ afterEach(() => { delete document.startViewTransition; delete window.matchMedia 
 describe('Router: title', () => {
   it('pone el título de la ruta (texto o función) y restaura el de la app sin título', async () => {
     navigate('/acerca'); await settle()
-    expect(document.title).toBe('Acerca de · signals-starter-kit')
+    expect(document.title).toBe(`Acerca de · ${config.name}`)
     navigate('/p/7'); await settle()
-    expect(document.title).toBe('Producto 7 · signals-starter-kit')
+    expect(document.title).toBe(`Producto 7 · ${config.name}`)
     navigate('/'); await settle()
-    expect(document.title).toBe('signals-starter-kit')
+    expect(document.title).toBe(config.name)
   })
 })
 
@@ -126,7 +127,7 @@ describe('regresiones R1 (Router.h2)', () => {
     navigate('/acerca'); await settle()
     navigate('/rota'); await settle()
     expect(root.textContent).toBe('página:Rota')
-    expect(document.title).toBe('signals-starter-kit')
+    expect(document.title).toBe(config.name)
     expect(err).toHaveBeenCalled()
     err.mockRestore()
   })
@@ -137,7 +138,7 @@ describe('regresiones R1 (Router.h2)', () => {
     navigate('/diferida'); await settle()
     expect(root.querySelector('.marco')).toBe(marco)
     expect(marco.textContent).toBe('DiferidaCargando…') // el título ya es el de la ruta que carga
-    expect(document.title).toBe('Diferida · signals-starter-kit')
+    expect(document.title).toBe(`Diferida · ${config.name}`)
     define('Diferida', () => h('p', {}, 'página:Diferida'))
     cargaDiferida.resolver() // la carga termina cuando el test quiere
     await settle()
@@ -149,7 +150,7 @@ describe('regresiones R1 (Router.h2)', () => {
 describe('cobertura R2 (title)', () => {
   it('title puede usar la query', async () => {
     navigate('/buscar?q=phone'); await settle()
-    expect(document.title).toBe('Buscar: phone · signals-starter-kit')
+    expect(document.title).toBe(`Buscar: phone · ${config.name}`)
   })
 })
 
@@ -170,14 +171,14 @@ describe('Router: setQuery (solo cambia la query)', () => {
   it('no vuelve a montar la página y actualiza un title que depende de query', async () => {
     navigate('/catalogo?q=a')
     await settle()
-    expect(document.title).toBe('Catálogo: a · signals-starter-kit')
+    expect(document.title).toBe(`Catálogo: a · ${config.name}`)
     const montajes = montajesCatalogo
     setQuery({ q: 'dune' })
     await settle()
-    expect(document.title).toBe('Catálogo: dune · signals-starter-kit')
+    expect(document.title).toBe(`Catálogo: dune · ${config.name}`)
     setQuery({ q: null }, { replace: true })
     await settle()
-    expect(document.title).toBe('Catálogo: todo · signals-starter-kit')
+    expect(document.title).toBe(`Catálogo: todo · ${config.name}`)
     expect(montajesCatalogo).toBe(montajes)
     expect(root.textContent).toContain('catálogo')
   })
@@ -197,6 +198,6 @@ describe('Router: setQuery (solo cambia la query)', () => {
     await settle()
     navigate('/acerca?q=b')
     await settle()
-    expect(document.title).toBe('Acerca de · signals-starter-kit')
+    expect(document.title).toBe(`Acerca de · ${config.name}`)
   })
 })

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.4.0
+
+Mejoras encontradas al usar el kit en formularios, modales y proyectos propios. Todas son compatibles: actualizar no requiere tocar nada.
+
+### Añadido
+
+- **`runWithOwner(owner, fn)`** (en `'@kit'`): ejecuta `fn` bajo un dueño guardado con `getOwner()`, para crear effects en callbacks asíncronos que se liberen con ese dueño.
+- **`bind:value` en grupos de radio**: todos los radios comparten un signal; queda marcado el que tiene su `value` y, al marcar otro, el signal recibe su `value`.
+- **Más exportaciones en `'@kit'`**: `bindProp`, `bindAttr`, `goBack`, `goForward` y `matchRoute`, que antes había que importar de su módulo.
+- **`config.apiUrl` y `config.apiTimeout`**, leídos de `VITE_API_URL` y `VITE_API_TIMEOUT`.
+
+### Cambiado
+
+- **`config.version`** toma por defecto la versión de `package.json` en lugar de un valor fijo.
+- **Tests del Router independientes de la app**: usan sus propias rutas y el nombre de `config`, así que ya no fallan al cambiar `.env`, las rutas o la página de inicio.
+
 ## 2.3.1
 
 Corrección de rendimiento. Es compatible: actualizar no requiere tocar nada.

@@ -78,7 +78,9 @@ Definidas en `.env` (no se versiona; usa `.env.example` como plantilla):
 | Variable | Uso |
 |---|---|
 | `VITE_APP_NAME` | Título de la página |
-| `VITE_APP_VERSION` | Versión de la app |
+| `VITE_APP_VERSION` | Versión de la app (por defecto, la de `package.json`) |
+| `VITE_API_URL` | URL base de tu API: `config.apiUrl` |
+| `VITE_API_TIMEOUT` | Timeout en ms: `config.apiTimeout` (0 = sin límite) |
 | `VITE_DEV_MODE` | Activa el modo desarrollo del logger |
 | `VITE_LOG_LEVEL` | `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR` o `SILENT` |
 | `VITE_DEVTOOLS` | Pon `false` para ocultar el [panel de devtools](#devtools) en desarrollo |
@@ -92,7 +94,7 @@ src/
 ├── style.css                # Tailwind
 ├── config/app.js            # Configuración leída de .env
 ├── core/
-│   ├── signal.js            # Reactividad: signal, computed, effect, Batch, untrack, createRoot, onCleanup, getOwner
+│   ├── signal.js            # Reactividad: signal, computed, effect, Batch, untrack, createRoot, onCleanup, getOwner, runWithOwner
 │   ├── resource.js          # resource(): datos asíncronos con carga, error y cancelación
 │   └── httpClient.js        # Cliente HTTP sobre fetch (timeout, AbortSignal, errores con status)
 ├── components/
@@ -148,6 +150,7 @@ dispose()       // detiene el effect
 - `untrack(fn)` lee signals sin suscribirse.
 - `Batch.run(fn)` agrupa varios cambios en una sola notificación.
 - `getOwner()` devuelve el effect o root actual (o `null`), por ejemplo para registrar `onCleanup` solo si hay dueño.
+- `runWithOwner(owner, fn)` ejecuta `fn` bajo un dueño guardado con `getOwner()`: los effects creados dentro (por ejemplo en un `then` o un `setTimeout`) se liberan con él. Si ese dueño ya se destruyó, no ejecuta `fn`.
 - `getStats()` devuelve `{ effects }`: cuántos effects hay vivos (útil para detectar fugas).
 
 #### Datos asíncronos: `resource`
@@ -284,6 +287,10 @@ const acepto = signal(false)
 h('input', { type: 'email', 'bind:value': email })            // input ↔ signal
 h('input', { type: 'checkbox', 'bind:checked': acepto })
 h('select', { 'bind:value': pais }, h('option', { value: 'es' }, 'España'))
+
+// Radios: todos con el mismo signal; queda marcado el que tiene su value
+const talla = signal('m')
+;['s', 'm', 'l'].map(v => h('input', { type: 'radio', name: 'talla', value: v, 'bind:value': talla }))
 ```
 
 - Enlace en los dos sentidos: al escribir se actualiza el signal; al cambiar el signal se actualiza el campo. Funciona en `input`, `textarea` y `select`.
