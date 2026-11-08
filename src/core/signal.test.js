@@ -92,3 +92,35 @@ describe('regresiones F1', () => {
     expect(Signal.current).toBeFalsy()
   })
 })
+
+describe('computed con el mismo valor', () => {
+  it('no vuelve a correr el effect si el computed da el mismo resultado', async () => {
+    const lista = signal([1])
+    const tiene2 = computed(() => lista.get().includes(2))
+    const seen = []
+    effect(() => { seen.push(tiene2.get()) })
+    lista.set([1, 3])
+    await tick()
+    expect(seen).toEqual([false])
+    lista.set([1, 2])
+    await tick()
+    expect(seen).toEqual([false, true])
+  })
+
+  it('corta la propagación en cadenas de computed', async () => {
+    const s = signal(1)
+    const par = computed(() => s.get() % 2 === 0)
+    let calculos = 0
+    const texto = computed(() => { calculos++; return par.get() ? 'par' : 'impar' })
+    const seen = []
+    effect(() => { seen.push(texto.get()) })
+    s.set(3)
+    await tick()
+    expect(calculos).toBe(1)
+    expect(seen).toEqual(['impar'])
+    s.set(4)
+    await tick()
+    expect(calculos).toBe(2)
+    expect(seen).toEqual(['impar', 'par'])
+  })
+})

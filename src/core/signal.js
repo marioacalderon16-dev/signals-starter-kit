@@ -43,28 +43,22 @@ class Signal {
   }
 }
 
+// Estados de Computed/Effect: CHECK = alguna fuente computed cambió de estado, hay que comprobar si su valor cambió
+const CLEAN = 0
+const CHECK = 1
+const DIRTY = 2
+
 class Computed {
   constructor(fn) {
     this.fn = fn
     this.value = undefined
-    this.isDirty = true
+    this.state = DIRTY
     this.subs = new Set()
     this.deps = new Set()
   }
 
   get() {
-    if (this.isDirty) {
-      this.deps.forEach(d => d.subs.delete(this))
-      this.deps.clear()
-      const prev = Signal.current
-      Signal.current = this
-      try {
-        this.value = this.fn()
-        this.isDirty = false
-      } finally {
-        Signal.current = prev
-      }
-    }
+    this.update()
     if (Signal.current && Signal.current !== this && Signal.current.deps) {
       this.subs.add(Signal.current)
       Signal.current.deps.add(this)
@@ -72,10 +66,45 @@ class Computed {
     return this.value
   }
 
+  // Recalcula solo si de verdad cambió alguna fuente; si el valor no cambia, no ensucia a sus observadores
+  update() {
+    if (this.state === CHECK) {
+      for (const dep of this.deps) {
+        if (dep instanceof Computed) dep.update()
+        if (this.state === DIRTY) break
+      }
+      if (this.state === CHECK) this.state = CLEAN
+    }
+    if (this.state !== DIRTY) return
+
+    const old = this.value
+    this.deps.forEach(d => d.subs.delete(this))
+    this.deps.clear()
+    const prev = Signal.current
+    Signal.current = this
+    try {
+      this.value = this.fn()
+      this.state = CLEAN
+    } finally {
+      Signal.current = prev
+    }
+    if (!Object.is(old, this.value)) {
+      this.subs.forEach(sub => { if (sub.state === CHECK) sub.state = DIRTY })
+    }
+  }
+
+  // Una fuente signal cambió
   dirty() {
-    if (this.isDirty) return
-    this.isDirty = true
-    this.subs.forEach(sub => sub.dirty())
+    const was = this.state
+    this.state = DIRTY
+    if (was === CLEAN) this.subs.forEach(sub => sub.check())
+  }
+
+  // Una fuente computed puede haber cambiado
+  check() {
+    if (this.state !== CLEAN) return
+    this.state = CHECK
+    this.subs.forEach(sub => sub.check())
   }
 }
 
@@ -88,7 +117,7 @@ const unsubscribe = (dep, sub) => {
   if (dep instanceof Computed && dep.subs.size === 0) {
     dep.deps.forEach(d => unsubscribe(d, dep))
     dep.deps.clear()
-    dep.isDirty = true
+    dep.state = DIRTY
   }
 }
 
@@ -119,6 +148,7 @@ class Effect {
     this.owned = []
     this.cleanups = []
     this.disposed = false
+    this.state = CLEAN
     efectosVivos++
     if (currentOwner) currentOwner.owned.push(this)
     this.run()
@@ -127,6 +157,7 @@ class Effect {
   run() {
     if (this.disposed) return
     Effect.pending.delete(this)
+    this.state = CLEAN
     this.deps.forEach(d => d.subs.delete(this))
     this.deps.clear()
 
@@ -151,7 +182,34 @@ class Effect {
     }
   }
 
+  // Corre solo si una fuente signal cambió o algún computed del que depende cambió de valor
+  update() {
+    if (this.disposed) return
+    if (this.state === CHECK) {
+      for (const dep of this.deps) {
+        if (dep instanceof Computed) dep.update()
+        if (this.state === DIRTY) break
+      }
+    }
+    if (this.state === DIRTY) this.run()
+    else {
+      Effect.pending.delete(this)
+      this.state = CLEAN
+    }
+  }
+
   dirty() {
+    this.state = DIRTY
+    this._schedule()
+  }
+
+  check() {
+    if (this.state !== CLEAN) return
+    this.state = CHECK
+    this._schedule()
+  }
+
+  _schedule() {
     Effect.pending.add(this)
     if (!Effect.scheduled) {
       Effect.scheduled = true
@@ -212,7 +270,7 @@ Effect.flush = () => {
       // Copia antes de iterar: los effects pueden encolar otros durante la ronda
       const queue = [...Effect.pending]
       Effect.pending.clear()
-      queue.forEach(e => e.run())
+      queue.forEach(e => e.update())
     }
   } finally {
     Effect.scheduled = false
