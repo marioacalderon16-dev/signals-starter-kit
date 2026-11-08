@@ -2,7 +2,7 @@
 
 Starter kit para construir SPAs en JavaScript vanilla con un mini-framework reactivo propio: **signals**, una función `h()` para crear DOM, componentes registrados por nombre y un router basado en la History API. Sin React ni Vue: todo el framework son unos pocos archivos que puedes leer y modificar.
 
-> **Versión 2.2.** Novedades: función como hijo de `h()` (`Dynamic`), `Show` con valor y `keyed`, `Link` reactivo y SVG en `h()` (ver el [CHANGELOG](CHANGELOG.md)). Si vienes de la 1.x, la migración es una línea en `main.js`. La 1.x sigue disponible con la etiqueta `v1.0.0`.
+> **Versión 2.4.** Novedades: `runWithOwner`, grupos de radio con `bind:value`, `bindProp`, `bindAttr`, `goBack`, `goForward` y `matchRoute` en `'@kit'`, y `config.apiUrl` / `config.apiTimeout`. En la 2.3.1, `computed` solo avisa si su valor cambia, y en la 2.3 llegó `on()` para eventos de `document` o `window`. Detalle en el [CHANGELOG](CHANGELOG.md). Si vienes de la 1.x, la migración es una línea en `main.js`. La 1.x sigue disponible con la etiqueta `v1.0.0`.
 
 Incluye una página de presentación con dos ejemplos en vivo (un contador básico y una tarjeta del clima), más los tests del kit (`npm test`).
 
@@ -145,6 +145,7 @@ contador.set(1) // el effect se vuelve a ejecutar en la siguiente microtask
 dispose()       // detiene el effect
 ```
 
+- Un `computed` solo avisa a quien lo lee si su resultado cambia: si sus fuentes cambian pero da el mismo valor, los effects y `computed` que dependen de él no se vuelven a ejecutar.
 - `effect()` devuelve una función `dispose`. Si la función del effect devuelve otra función, se usa como limpieza.
 - `onCleanup(fn)` registra una limpieza en el effect o root actual.
 - `untrack(fn)` lee signals sin suscribirse.
@@ -362,6 +363,7 @@ currentQuery.get() // { color: 'rojo' } — reactivo
 - Los enlaces internos `<a href="/...">` navegan sin recargar la página. Los externos, `target="_blank"`, `download` y los clics con modificadores (Ctrl/Cmd…) se dejan al navegador.
 - Las rutas ignoran la query, el hash y la barra final: `/products/7/?x=1` coincide con `/products/:id`.
 - `generateUrl('product', { id: 7 })` construye la URL de una ruta por su nombre.
+- `goBack()` y `goForward()` equivalen a los botones atrás y adelante del navegador. `matchRoute(path)` devuelve `{ name, component, params, route }` de la ruta que coincide, o `null`.
 
 #### La query como estado: `setQuery`
 
@@ -440,6 +442,14 @@ export const routes = [
 - `redirect` (texto o función) y `beforeEnter` (devuelve una ruta para redirigir; cualquier otro valor deja pasar) reciben `{ path, params, query }`.
 - Las redirecciones usan `replace`: no dejan entradas extra en el historial. Los bucles se cortan a las 10 redirecciones.
 - El guard se evalúa al navegar, no cuando cambia un signal que lee: tras cerrar sesión, llama a `navigate('/login')`.
+
+#### Página 404 propia
+
+Sin ruta que coincida, el router muestra "Página no encontrada (404)". Para usar tu página, añade al **final** de `routes` una ruta con `path: '*'` (coincide con cualquier ruta):
+
+```js
+{ path: '*', component: 'NotFoundPage', title: 'No encontrada' }
+```
 
 #### Carga diferida de páginas
 

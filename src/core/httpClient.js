@@ -156,6 +156,7 @@ export class HttpClient {
     return this.request('PATCH', endpoint, { ...options, data, headers })
   }
 
+  // Con cuerpo: api.delete('/items', {}, { data: { ids: [1, 2] } })
   delete(endpoint, headers, options = {}) {
     return this.request('DELETE', endpoint, { ...options, headers })
   }

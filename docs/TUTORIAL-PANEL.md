@@ -354,24 +354,11 @@ VITE_API_URL=https://dummyjson.com
 VITE_API_TIMEOUT=8000
 ```
 
-Y léela en `src/config/app.js`:
+El kit ya la lee en `src/config/app.js` (desde la 2.4) y la expone como `config.apiUrl` y `config.apiTimeout`. Solo cambia sus valores por defecto para que apunten a esta API:
 
 ```js
-/**
- * src/config/app.js
- * 
- * Cargar configuración desde .env
- */
-
-const config = {
-  name: import.meta.env.VITE_APP_NAME || 'signals-starter-kit',
-  version: import.meta.env.VITE_APP_VERSION || '1.0.0',
-  mode: import.meta.env.MODE || 'development',
   apiUrl: import.meta.env.VITE_API_URL || 'https://dummyjson.com',
   apiTimeout: Number(import.meta.env.VITE_API_TIMEOUT) || 8000
-}
-
-export default config
 ```
 
 Los valores por defecto (`|| 'https://dummyjson.com'`) hacen que la app funcione aunque no exista `.env`, como en el servidor de CI del capítulo 10. Recuerda reiniciar `npm run dev` después de cambiar `.env`.

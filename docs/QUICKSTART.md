@@ -466,6 +466,7 @@ npm run preview
 | Una lista que cambia | `For(lista, item => item.id, item => h(…))` |
 | Mostrar u ocultar algo | `Show(condición, () => h(…))` |
 | Enlazar un input con un signal | `h('input', { 'bind:value': s })` |
+| Un grupo de radios | Cada radio con su `value` y el mismo `'bind:value': s` |
 | Pedir datos a una API | `resource((_, { signal }) => api.get(…, {}, { signal }))` |
 | Un enlace interno | `Link({ to: '/ruta' }, 'texto')` |
 | Re-renderizar un bloque entero | `define('Nombre', fn, true)` |
